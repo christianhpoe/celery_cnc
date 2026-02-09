@@ -37,6 +37,15 @@ def _build_wsgi_app() -> WSGIApplication:
     return application
 
 
+def _frontend_url(host: str, port: int) -> str:
+    display_host = host
+    if host in {"0.0.0.0", "::"}:  # noqa: S104
+        display_host = "127.0.0.1"
+    if ":" in display_host and not display_host.startswith("["):
+        display_host = f"[{display_host}]"
+    return f"http://{display_host}:{port}/"
+
+
 def serve(host: str, port: int, *, shutdown_event: _EventLike | None = None) -> None:
     """Serve the Django WSGI app with a lightweight dev server."""
     os.environ.setdefault("DJANGO_SETTINGS_MODULE", "celery_cnc.web.settings")
@@ -49,6 +58,9 @@ def serve(host: str, port: int, *, shutdown_event: _EventLike | None = None) -> 
         handler_class=WSGIRequestHandler,
     )
     logger = logging.getLogger(__name__)
+    print(  # noqa: T201
+        f"Frontend available at {_frontend_url(host, port)}",
+    )
     if shutdown_event is not None:
 
         def _wait_for_shutdown() -> None:

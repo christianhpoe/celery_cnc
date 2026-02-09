@@ -164,6 +164,7 @@
                   </a>
                 </th>
               {% endwith %}
+              <th>Childs</th>
               {% with header=sort_headers.worker %}
                 <th{% if header.active %} aria-sort="{% if header.direction == 'asc' %}ascending{% else %}descending{% endif %}"{% endif %}>
                   <a
@@ -222,6 +223,9 @@
                 <td>
                   <span class="badge {{ task.badge_class }}">{{ task.state }}</span>
                 </td>
+                <td>
+                  <span class="task-runtime">{{ task.child_count|default:0 }}</span>
+                </td>
                 <td>{{ task.worker }}</td>
                 <td>
                   {% if task.received %}
@@ -247,7 +251,7 @@
               </tr>
             {% empty %}
               <tr>
-                <td colspan="7">No tasks matched your filters.</td>
+                <td colspan="8">No tasks matched your filters.</td>
               </tr>
             {% endfor %}
           </tbody>

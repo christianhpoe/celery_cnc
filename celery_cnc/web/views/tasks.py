@@ -84,6 +84,7 @@ class _TaskEntry(TypedDict):
     state: str
     badge_class: str
     worker: str
+    child_count: int
     runtime: float | None
     received: datetime | None
     started: datetime | None
@@ -108,6 +109,7 @@ class _TaskView(TypedDict):
     state: str
     badge_class: str
     worker: str
+    child_count: int
     runtime: float | None
     received: datetime | None
     started: datetime | None
@@ -199,6 +201,7 @@ def _task_to_view(task: Task) -> _TaskView:
         "state": state,
         "badge_class": STATE_BADGES.get(state, "badge-muted"),
         "worker": task.worker or "—",
+        "child_count": 0,
         "runtime": float(task.runtime) if task.runtime is not None else None,
         "received": task.received,
         "started": task.started,
@@ -805,6 +808,8 @@ def task_list(request: HttpRequest) -> HttpResponse:  # noqa: PLR0912, PLR0915
         visible_start = (page - 1) * page_size + 1
         visible_end = visible_start + max(len(paginated_tasks) - 1, 0)
 
+    _attach_child_counts(paginated_tasks)
+
     query = request.GET.copy()
     query.pop("page", None)
     base_query = query.urlencode()
@@ -1000,6 +1005,28 @@ def _expand_task_ids(value: object) -> list[str]:
                 return [str(item) for item in parsed if item is not None]
         return [text]
     return [str(value)]
+
+
+def _attach_child_counts(tasks: list[_TaskView]) -> None:
+    if not tasks:
+        return
+    root_groups: dict[str, set[str]] = {}
+    child_sets: dict[str, set[str]] = {task["task_id"]: set() for task in tasks}
+    for task in tasks:
+        root_id = task["root_id"] or task["task_id"]
+        root_groups.setdefault(root_id, set()).add(task["task_id"])
+    with open_db() as db:
+        for root_id, parent_ids in root_groups.items():
+            relations = db.get_task_relations(root_id)
+            for relation in relations:
+                parent_id = relation.parent_id
+                if parent_id is None or parent_id not in parent_ids:
+                    continue
+                for child_id in _expand_task_ids(relation.child_id):
+                    if child_id and child_id != parent_id:
+                        child_sets[parent_id].add(child_id)
+    for task in tasks:
+        task["child_count"] = len(child_sets.get(task["task_id"], set()))
 
 
 def build_relations(task: _TaskEntry) -> list[dict[str, str]]:

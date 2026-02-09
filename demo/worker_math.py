@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+import os
 import time
 from typing import TYPE_CHECKING, Any, Protocol, cast
 from uuid import uuid4
@@ -41,11 +42,10 @@ def _require_task_id(task_id: str | None, context: str) -> str:
     return task_id
 
 
-app = create_celery_app(
-    "demo_math",
-    broker_url="amqp://guest:guest@localhost:5672//",  # broker 1
-    backend_url="redis://localhost:6379/0",  # backend 1
-)
+broker_url = os.environ.get("BROKER_URL") or "amqp://guest:guest@localhost:5672//"  # broker 1
+backend_url = os.environ.get("BACKEND_URL") or "redis://localhost:6379/0"  # backend 1
+
+app = create_celery_app("demo_math", broker_url=broker_url, backend_url=backend_url)
 
 
 def _link_root_to_canvas(root_id: str, canvas_id: str) -> None:

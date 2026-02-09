@@ -28,17 +28,25 @@ build_frontend:
 
 build: build_frontend
 
-install:
+install_frontend:
+	npm --prefix frontend/graph-ui install
+
+install_backend:
 	uv sync --all-extras --dev --frozen
 	uv run pre-commit install
+
+install: install_backend install_frontend
 
 lint:
 	CELERY_CNC_WORKERS= uv run pre-commit run --all-files
 
+docker_network:
+	docker network create celery_cnc_demo || true
+
 demo_stop_infra:
 	docker compose -p celery_cnc_demo -f demo/infra.docker-compose.yml down --volumes --remove-orphans
 
-demo_start_infra:
+demo_start_infra: docker_network
 	docker compose -p celery_cnc_demo -f demo/infra.docker-compose.yml up -d
 
 demo_worker_math: demo_start_infra
@@ -49,6 +57,9 @@ demo_worker_text: demo_start_infra
 
 demo_worker_sleep: demo_start_infra
 	BROKER3_URL=$(BROKER3_URL) BACKEND3_URL=$(BACKEND3_URL) uv run celery -A demo.worker_sleep worker -n sleep@%h -l INFO
+
+demo_workers: demo_start_infra
+	docker compose -p celery_cnc_demo -f demo/worker.docker-compose.yml up --build
 
 demo_tasks:
 	uv run python demo/schedule_demo_tasks.py

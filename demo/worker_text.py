@@ -2,17 +2,17 @@
 
 from __future__ import annotations
 
+import os
 import re
 import string
 from collections import Counter
 
 from .common import create_celery_app
 
-app = create_celery_app(
-    "demo_text",
-    broker_url="amqp://guest:guest@localhost:5673//",  # broker 2
-    backend_url="redis://localhost:6380/0",  # backend 2
-)
+broker_url = os.environ.get("BROKER2_URL") or "amqp://guest:guest@localhost:5673//"  # broker 2
+backend_url = os.environ.get("BACKEND2_URL") or "redis://localhost:6380/0"  # backend 2
+
+app = create_celery_app("demo_text", broker_url=broker_url, backend_url=backend_url)
 
 _WORD_RE = re.compile(r"\b\w+\b")
 _JSON_MULTITASK_SAMPLE: str = (
