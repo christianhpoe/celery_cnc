@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+
+{% block content %}
+  <header class="page-section-header">
+    <div>
+      <p class="eyebrow">Operations</p>
+      <h2>Application logs</h2>
+      <p>Live tail of {{ log_dir }}.</p>
+    </div>
+  </header>
+
+  <section class="detail-card">
+    <form method="get" class="filter-panel" data-auto-submit="true">
+      <div>
+        <label for="log-component">Component</label>
+        <select id="log-component" name="component">
+          {% if components %}
+            {% for name in components %}
+              <option value="{{ name }}" {% if name == selected_component %}selected{% endif %}>{{ name }}</option>
+            {% endfor %}
+          {% else %}
+            <option value="">No log files found</option>
+          {% endif %}
+        </select>
+      </div>
+      <div>
+        <label for="log-lines">Lines</label>
+        <input id="log-lines" name="lines" type="number" min="1" max="5000" value="{{ lines }}" />
+      </div>
+      <div class="filter-actions">
+        <button class="btn accent" type="submit">Refresh logs</button>
+      </div>
+    </form>
+
+    {% if error %}
+      <p class="detail-runtime">{{ error }}</p>
+    {% endif %}
+
+    {% if selected_file %}
+      <p class="detail-runtime">Reading {{ selected_file }}</p>
+    {% endif %}
+
+    {% if content %}
+      <pre class="log-output">{{ content }}</pre>
+    {% elif not error %}
+      <p class="detail-runtime">No log content available.</p>
+    {% endif %}
+  </section>
+{% endblock %}

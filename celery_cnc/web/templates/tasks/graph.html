@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block content %}
+  <section class="page-section-header">
+    <div>
+      <p class="eyebrow">Task graph</p>
+      <h2>Graph for {{ task_id }}</h2>
+      <p>Visual representation of parent/children relationships.</p>
+    </div>
+  </section>
+
+  <section>
+    <div id="dag-container" class="dag-canvas">Loading graph…</div>
+  </section>
+  {{ nodes|json_script:"dag-nodes" }}
+  {{ edges|json_script:"dag-edges" }}
+  {{ meta|json_script:"dag-meta" }}
+{% endblock %}
+
+{% block scripts %}
+  <link rel="stylesheet" href="{% static 'graph/graph.css' %}?v={{ last_updated|date:'U' }}">
+  <script src="{% static 'graph/graph.js' %}?v={{ last_updated|date:'U' }}"></script>
+  <script>
+    document.addEventListener("DOMContentLoaded", () => {
+      const nodesEl = document.getElementById("dag-nodes");
+      const edgesEl = document.getElementById("dag-edges");
+      const metaEl = document.getElementById("dag-meta");
+      const nodes = nodesEl ? JSON.parse(nodesEl.textContent) : [];
+      const edges = edgesEl ? JSON.parse(edgesEl.textContent) : [];
+      const meta = metaEl ? JSON.parse(metaEl.textContent) : {};
+      const el = document.getElementById("dag-container");
+      const themeAttr = document.documentElement.getAttribute("data-theme");
+      const theme = themeAttr && themeAttr !== "white" ? "dark" : "light";
+      if (el && window.CeleryDag?.render) {
+        window.CeleryDag.render(el, { nodes, edges, meta }, {
+          refreshUrl: "{{ graph_updates_url|escapejs }}",
+          snapshotUrl: "{{ graph_snapshot_url|escapejs }}",
+          taskDetailUrlTemplate: "{{ task_detail_template|escapejs }}",
+          theme,
+        });
+      }
+    });
+  </script>
+{% endblock %}

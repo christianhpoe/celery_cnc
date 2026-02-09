@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block content %}
+  <header class="page-section-header">
+    <div>
+      <p class="eyebrow">Overview</p>
+      <h2>Brokers & workers</h2>
+      <p>Inspect brokers, drill into workers, and follow queue activity.</p>
+    </div>
+    <div class="page-actions">
+      <a class="btn ghost" href="{% url 'worker-add' %}">Add worker</a>
+      <form method="post" action="{% url 'workers-restart' %}">
+        {% csrf_token %}
+        <button class="btn ghost" type="submit">Restart all</button>
+      </form>
+    </div>
+  </header>
+
+  <section class="detail-card loading-card" data-workers-loading>
+    <div class="loading-indicator" aria-hidden="true">
+      <span class="spinner"></span>
+      <span>Loading broker and worker data...</span>
+    </div>
+  </section>
+
+  <div id="workers-overview" data-workers-fragment="{% url 'workers-fragment' %}"></div>
+  <noscript>
+    <section class="detail-card">
+      <h3>Workers overview</h3>
+      <p>Enable JavaScript to load broker and worker data.</p>
+    </section>
+  </noscript>
+{% endblock %}
+
+{% block scripts %}
+  <script src="{% static 'js/workers-overview.js' %}" defer></script>
+{% endblock %}

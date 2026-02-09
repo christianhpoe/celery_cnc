@@ -1,0 +1,49 @@
+default_language_version:
+  python: python3.13
+
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: trailing-whitespace
+        args:
+          - --markdown-linebreak-ext=md
+      - id: end-of-file-fixer
+      - id: check-json
+        exclude: ^frontend/graph-ui/node_modules/
+      - id: check-toml
+      - id: check-yaml
+        args: [--allow-multiple-documents]
+      - id: check-ast
+      - id: check-case-conflict
+      - id: debug-statements
+      - id: detect-private-key
+      - id: name-tests-test
+        args: [--pytest-test-first]
+        exclude: ^tests/fixtures/
+
+  - repo: https://github.com/charliermarsh/ruff-pre-commit
+    rev: 'v0.15.0'
+    hooks:
+    # Run the formatter.
+    - id: ruff-format
+    # Run the linter.
+    - id: ruff-check
+      args: [ --fix ]
+
+  - repo: local
+    hooks:
+      - id: mypy
+        name: mypy
+        entry: uv run mypy celery_cnc demo tests
+        language: system
+        types: [python]
+        pass_filenames: false
+        args: []
+      - id: pytest
+        name: pytest
+        entry: uv run pytest -q
+        language: system
+        pass_filenames: false
+        always_run: true
+        args: []

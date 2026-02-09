@@ -1,0 +1,290 @@
+{% extends "base.html" %}
+
+{% block content %}
+  <article class="detail-hero">
+    <div>
+      <p class="eyebrow">Task lookup</p>
+      <h2>{{ task.name }}</h2>
+      <p class="detail-subtitle">
+        ID: <span>{{ task.task_id }}</span> · Worker: <strong>{{ task.worker }}</strong>
+      </p>
+    </div>
+    <div class="detail-status">
+      <span class="badge {{ state_badge }}">{{ task.state }}</span>
+      {% if task.runtime is not None %}
+        <span class="detail-runtime">{{ task.runtime|floatformat:1 }}s runtime</span>
+      {% else %}
+        <span class="detail-runtime">runtime unknown</span>
+      {% endif %}
+      <div class="detail-actions">
+        <form method="post" action="{% url 'task-retry' task.task_id %}">
+          {% csrf_token %}
+          <button class="btn ghost" type="submit">Retry</button>
+        </form>
+        <form method="post" action="{% url 'task-revoke' task.task_id %}">
+          {% csrf_token %}
+          <button class="btn ghost" type="submit">Revoke</button>
+        </form>
+        <a class="btn ghost" href="{% url 'task-graph' task.task_id %}">Inspect graph</a>
+      </div>
+    </div>
+  </article>
+
+  <section class="detail-grid detail-grid--compact">
+    <article class="detail-card detail-card--compact">
+      <h3>Execution flow</h3>
+      <div class="detail-runtime">
+        Retries: <strong>{{ task.retries|default:0 }}</strong>
+      </div>
+      <ol class="relation-list">
+        {% for entry in relations %}
+          <li>
+            <span>{{ entry.title }}</span>
+            <span class="badge badge-info">{{ entry.state }}</span>
+          </li>
+        {% endfor %}
+      </ol>
+    </article>
+
+    <article class="detail-card detail-card--compact">
+      <h3>Relations</h3>
+      <div class="relation-links">
+        <div class="relation-block">
+          <span class="detail-label">Parent</span>
+          {% if parent_link %}
+            <div class="relation-item">
+              {% if parent_link.exists %}
+                <a href="{% url 'task-detail' parent_link.id %}">{{ parent_link.label }}</a>
+              {% else %}
+                <span>{{ parent_link.label }}</span>
+              {% endif %}
+              {% if parent_link.state %}
+                <span class="badge {{ parent_link.badge_class }}">{{ parent_link.state }}</span>
+              {% endif %}
+            </div>
+          {% else %}
+            <p class="detail-runtime">No parent task recorded.</p>
+          {% endif %}
+        </div>
+
+        <div class="relation-block">
+          <span class="detail-label">Children</span>
+          {% if child_links %}
+            <ul class="relation-children">
+              {% for child in child_links %}
+                <li>
+                  {% if child.exists %}
+                    <a href="{% url 'task-detail' child.id %}">{{ child.label }}</a>
+                  {% else %}
+                    <span>{{ child.label }}</span>
+                  {% endif %}
+                  {% if child.state %}
+                    <span class="badge {{ child.badge_class }}">{{ child.state }}</span>
+                  {% endif %}
+                </li>
+              {% endfor %}
+            </ul>
+          {% else %}
+            <p class="detail-runtime">No child tasks recorded.</p>
+          {% endif %}
+        </div>
+      </div>
+    </article>
+  </section>
+
+  <section class="detail-stack">
+    <article class="detail-card detail-card--stacked">
+      <div class="detail-card-header">
+        <h3>Result</h3>
+        {% if task.result %}
+          <button
+            class="btn ghost btn-xs copy-btn"
+            type="button"
+            data-copy-source="task-result-raw"
+            data-copy-format="json"
+          >
+            Copy
+          </button>
+        {% endif %}
+      </div>
+      {% if task.result %}
+        <div
+          class="expandable"
+          data-expand-source="task-result-raw"
+          data-expand-format="json"
+          data-expand-title="Task output"
+        >
+          <pre class="expandable-preview">{{ task.result|truncatechars:200 }}</pre>
+          <button class="btn ghost btn-sm expandable-btn" type="button">View output</button>
+        </div>
+      {% else %}
+        <p>Pending result.</p>
+      {% endif %}
+    </article>
+
+    <article class="detail-card detail-card--stacked">
+      <h3>Payload</h3>
+      <div class="detail-code">
+        <div class="detail-code-header">
+          <strong>Args</strong>
+          <button
+            class="btn ghost btn-xs copy-btn"
+            type="button"
+            data-copy-source="task-args-raw"
+            data-copy-format="json"
+          >
+            Copy
+          </button>
+        </div>
+        <div
+          class="expandable"
+          data-expand-source="task-args-raw"
+          data-expand-format="json"
+          data-expand-title="Task args"
+        >
+          <pre class="expandable-preview">{{ task.args|default:"—"|truncatechars:160 }}</pre>
+          <button class="btn ghost btn-sm expandable-btn" type="button">View args</button>
+        </div>
+      </div>
+      <div class="detail-code">
+        <div class="detail-code-header">
+          <strong>Kwargs</strong>
+          <button
+            class="btn ghost btn-xs copy-btn"
+            type="button"
+            data-copy-source="task-kwargs-raw"
+            data-copy-format="json"
+          >
+            Copy
+          </button>
+        </div>
+        <div
+          class="expandable"
+          data-expand-source="task-kwargs-raw"
+          data-expand-format="json"
+          data-expand-title="Task kwargs"
+        >
+          <pre class="expandable-preview">{{ task.kwargs|default:"—"|truncatechars:160 }}</pre>
+          <button class="btn ghost btn-sm expandable-btn" type="button">View kwargs</button>
+        </div>
+      </div>
+    </article>
+
+    <article class="detail-card detail-card--stacked">
+      <div class="detail-card-header">
+        <h3>Traceback</h3>
+        {% if task.traceback %}
+          <button
+            class="btn ghost btn-xs copy-btn"
+            type="button"
+            data-copy-source="task-traceback-raw"
+            data-copy-format="traceback"
+          >
+            Copy
+          </button>
+        {% endif %}
+      </div>
+      {% if task.traceback %}
+        <div
+          class="expandable"
+          data-expand-source="task-traceback-raw"
+          data-expand-format="traceback"
+          data-expand-title="Traceback"
+        >
+          <pre class="expandable-preview">{{ task.traceback|truncatechars:220 }}</pre>
+          <button class="btn ghost btn-sm expandable-btn" type="button">View traceback</button>
+        </div>
+      {% else %}
+        <p>No traceback recorded.</p>
+      {% endif %}
+    </article>
+  </section>
+
+  <div class="is-hidden">
+    {{ task.args|default:""|json_script:"task-args-raw" }}
+    {{ task.kwargs|default:""|json_script:"task-kwargs-raw" }}
+    {{ task.result|default:""|json_script:"task-result-raw" }}
+    {{ task.traceback|default:""|json_script:"task-traceback-raw" }}
+  </div>
+{% endblock %}
+
+{% block scripts %}
+  {{ block.super }}
+  <script>
+    (function () {
+      function copyText(text) {
+        if (navigator.clipboard && window.isSecureContext) {
+          return navigator.clipboard.writeText(text);
+        }
+        return new Promise(function (resolve, reject) {
+          var textarea = document.createElement("textarea");
+          textarea.value = text;
+          textarea.setAttribute("readonly", "");
+          textarea.style.position = "fixed";
+          textarea.style.opacity = "0";
+          document.body.appendChild(textarea);
+          textarea.select();
+          try {
+            var ok = document.execCommand("copy");
+            document.body.removeChild(textarea);
+            if (ok) {
+              resolve();
+            } else {
+              reject(new Error("copy-failed"));
+            }
+          } catch (err) {
+            document.body.removeChild(textarea);
+            reject(err);
+          }
+        });
+      }
+
+      function getCopyPayload(sourceId, format) {
+        var script = document.getElementById(sourceId);
+        var rawText = script ? script.textContent || "" : "";
+        if (!rawText) {
+          return "";
+        }
+        try {
+          var parsed = JSON.parse(rawText);
+          if (typeof parsed === "string") {
+            return parsed;
+          }
+          if (format === "json") {
+            return JSON.stringify(parsed, null, 2);
+          }
+          return JSON.stringify(parsed);
+        } catch (err) {
+          return rawText;
+        }
+      }
+
+      var buttons = Array.from(document.querySelectorAll(".copy-btn[data-copy-source]"));
+      buttons.forEach(function (button) {
+        var sourceId = button.getAttribute("data-copy-source") || "";
+        var format = button.getAttribute("data-copy-format") || "text";
+        var defaultLabel = button.textContent || "Copy";
+        var resetTimer = null;
+
+        button.addEventListener("click", function () {
+          var text = getCopyPayload(sourceId, format);
+          copyText(text)
+            .then(function () {
+              button.textContent = "Copied";
+            })
+            .catch(function () {
+              button.textContent = "Copy failed";
+            })
+            .finally(function () {
+              if (resetTimer) {
+                clearTimeout(resetTimer);
+              }
+              resetTimer = window.setTimeout(function () {
+                button.textContent = defaultLabel;
+              }, 2000);
+            });
+        });
+      });
+    })();
+  </script>
+{% endblock %}

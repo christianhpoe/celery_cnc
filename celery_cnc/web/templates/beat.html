@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+
+{% block content %}
+  <section class="page-section-header">
+    <div>
+      <p class="eyebrow">Beat schedules</p>
+      <h2>Periodic tasks</h2>
+      <p>Live view of the beat scheduler. Toggle enable, edit schedule, or delete entries.</p>
+    </div>
+    <div class="page-actions">
+      <a class="btn ghost" href="{% url 'beat-add' %}">Add schedule</a>
+      <form method="post" action="{% url 'beat-sync' %}">
+        {% csrf_token %}
+        <button class="btn ghost" type="submit">Sync beat</button>
+      </form>
+    </div>
+  </section>
+
+  <section class="table-wrapper">
+    <table>
+      <thead>
+        <tr>
+          <th>Worker</th>
+          <th>Name</th>
+          <th>Task</th>
+          <th>Schedule</th>
+          <th>Last run</th>
+          <th>Runs</th>
+          <th>Status</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for schedule in schedules %}
+          <tr>
+            <td>{{ schedule.app|default:"—" }}</td>
+            <td>{{ schedule.name }}</td>
+            <td>{{ schedule.task }}</td>
+            <td>{{ schedule.schedule }}</td>
+            <td>
+              {% if schedule.last_run %}
+                {{ schedule.last_run|time:"H:i" }} · {{ schedule.last_run|date:"M d" }}
+              {% else %}
+                —
+              {% endif %}
+            </td>
+            <td>{{ schedule.total_runs|default:"—" }}</td>
+            <td>
+              <span class="badge {{ schedule.enabled|yesno:'badge-success,badge-muted' }}">
+                {{ schedule.enabled|yesno:'Enabled,Disabled' }}
+              </span>
+            </td>
+            <td>
+              <div class="table-actions">
+                <a class="btn ghost" href="{% url 'beat-edit' schedule.id %}?app={{ schedule.app }}">Edit</a>
+                <form method="post" action="{% url 'beat-delete' schedule.id %}">
+                  {% csrf_token %}
+                  <input type="hidden" name="app" value="{{ schedule.app }}" />
+                  <button class="btn ghost" type="submit">Delete</button>
+                </form>
+              </div>
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </section>
+
+  <section class="detail-card">
+    <h3>Schedule health</h3>
+    {% if schedules %}
+      <p>
+        Beat last polled {{ schedules.0.last_run|time:"H:i" }}.
+        Worker heartbeats are tracked separately to keep the scheduler resilient.
+      </p>
+    {% else %}
+      <p>No schedules configured yet.</p>
+    {% endif %}
+  </section>
+{% endblock %}

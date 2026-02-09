@@ -1,0 +1,82 @@
+{% load static %}
+
+<section class="dashboard-center">
+  <div class="summary-grid">
+    {% for card in summary_cards %}
+      <article class="summary-card">
+        <small>{{ card.title }}</small>
+        <h3>{{ card.value }}</h3>
+        <small>{{ card.hint }}</small>
+      </article>
+    {% endfor %}
+  </div>
+</section>
+
+<section class="dashboard-center">
+  <div class="state-grid">
+    {% for state in state_cards %}
+      <div class="state-card">
+        <span class="state-label">{{ state.label }}</span>
+        <strong>{{ state.count }}</strong>
+        <small>{{ state.change }}</small>
+      </div>
+    {% endfor %}
+  </div>
+</section>
+
+<section class="dashboard-center">
+  <header class="page-section-header">
+    <div>
+      <p class="eyebrow">Workers</p>
+      <h2>Fleet snapshot</h2>
+      <p>Live status plus task state counts per worker.</p>
+    </div>
+  </header>
+  <div class="table-wrapper" data-worker-table>
+    <table aria-live="polite">
+      <thead>
+        <tr>
+          <th>Hostname</th>
+          <th>Status</th>
+          {% for state in worker_state_columns %}
+            <th>{{ state }}</th>
+          {% endfor %}
+          <th>Last seen</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for worker in worker_rows %}
+          <tr>
+            <td>
+              <div class="task-info">
+                <strong><a href="{% url 'worker-detail' worker.hostname %}" data-worker-link>{{ worker.hostname }}</a></strong>
+              </div>
+            </td>
+            <td>
+              <span class="badge {{ worker.badge }}">{{ worker.status }}</span>
+            </td>
+            {% for cell in worker.state_cells %}
+              <td>
+                <a
+                  class="table-link"
+                  href="{% url 'tasks' %}?worker={{ worker.hostname|urlencode }}&state={{ cell.state }}"
+                >
+                  {{ cell.count }}
+                </a>
+              </td>
+            {% endfor %}
+            <td>
+              {% if worker.last_seen_seconds is not None %}
+                <small>last seen {{ worker.last_seen_seconds }}s ago</small>
+              {% else %}
+                <small>never</small>
+              {% endif %}
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+
+{{ worker_state_columns|json_script:"worker-state-cols" }}

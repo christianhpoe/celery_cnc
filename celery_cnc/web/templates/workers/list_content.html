@@ -1,0 +1,66 @@
+{% if broker_tree %}
+  <section class="broker-tree">
+    {% for node in broker_tree %}
+      <article class="broker-node">
+        <div class="broker-node-header">
+          <div>
+            <p class="detail-label">Broker</p>
+            <div class="broker-node-title">
+              <a href="{% url 'broker-detail' node.broker.broker_key %}">
+                {{ node.broker.broker_label }}
+              </a>
+              <span class="badge badge-muted">{{ node.broker.broker_type_label }}</span>
+            </div>
+            <p class="broker-node-meta">
+              Backends: {{ node.broker.backend_labels|join:", "|default:"—" }}
+            </p>
+          </div>
+          <div class="broker-node-stats">
+            <span class="detail-runtime">{{ node.broker.queues|length }} queues</span>
+            <span class="detail-runtime">{{ node.workers|length }} workers</span>
+          </div>
+        </div>
+
+        <ul class="broker-tree-children">
+          {% for worker in node.workers %}
+            <li>
+              <div class="broker-worker">
+                <strong>
+                  <a href="{% url 'worker-detail' worker.hostname %}">{{ worker.hostname }}</a>
+                </strong>
+                <span class="broker-worker-meta">
+                  {{ worker.active }} active · {{ worker.queues|join:", "|default:"—" }}
+                </span>
+              </div>
+              <span class="badge {{ worker.badge }}">{{ worker.status }}</span>
+            </li>
+          {% empty %}
+            <li class="broker-tree-empty">No workers attached yet.</li>
+          {% endfor %}
+        </ul>
+      </article>
+    {% endfor %}
+  </section>
+{% else %}
+  <section class="detail-card">
+    <h3>No brokers configured</h3>
+    <p>Register Celery apps to start inspecting broker queues and workers.</p>
+  </section>
+{% endif %}
+
+{% if unassigned_workers %}
+  <section class="detail-card">
+    <h3>Unassigned workers</h3>
+    <ul class="relation-list">
+      {% for worker in unassigned_workers %}
+        <li>
+          <span>
+            <strong><a href="{% url 'worker-detail' worker.hostname %}">{{ worker.hostname }}</a></strong>
+            <small class="detail-runtime"> · {{ worker.active }} active</small>
+          </span>
+          <span class="badge {{ worker.badge }}">{{ worker.status }}</span>
+        </li>
+      {% endfor %}
+    </ul>
+  </section>
+{% endif %}

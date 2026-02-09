@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+
+{% block content %}
+  <article class="detail-hero">
+    <div>
+      <p class="eyebrow">Broker detail</p>
+      <h2>{{ broker.broker_label }}</h2>
+      <p class="detail-subtitle">
+        {{ broker.broker_type_label }} broker · Backends: {{ broker.backend_labels|join:", "|default:"—" }}
+      </p>
+    </div>
+    <div class="detail-status">
+      <span class="detail-runtime">{{ broker.queues|length }} queues</span>
+      <span class="detail-runtime">{{ broker.workers|length }} workers attached</span>
+    </div>
+  </article>
+
+  <section class="detail-card">
+    <h3>Queues</h3>
+    {% include "brokers/_queue_table.html" with queue_rows=broker.queues empty_message="No queues reported." %}
+  </section>
+
+  <section class="detail-card">
+    <h3>Notes</h3>
+    <p class="detail-runtime">
+      Queue metrics depend on the broker transport. Pending, unacked, and rates are shown when available.
+    </p>
+  </section>
+{% endblock %}

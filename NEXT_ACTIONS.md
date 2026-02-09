@@ -1,0 +1,25 @@
+## 0. Current To-Do (User)
+- [x] Format JSON inputs/outputs cleanly in the UI (pretty + readable).
+- [x] Investigate why the `Schedule.JSON.Multitask` task did not start when started in the demo script
+- [x] Add a delete-on-boot flag for DB cleanup on startup.
+- [x] Fix task search by task name.
+- [x] Replace filter Apply button with debounced on-change filtering.
+- [x] Fix the task graph (IDs showing, nodes don’t make sense).
+- [x] Ensure all components emit logs regularly so the Logs page is populated.
+- [x] Add a Settings page with theme selection (Monokai, Darkula, Generic, Dark, White, Solaris).
+- [x] Settings page: allow configuring the polling interval.
+- [x] Task start UI: use each task’s default queue (not a global/system default).
+- [x] Task start UI: searchable dropdown for task selection.
+- [x] Task start UI: provide a simple JSON editor for args/kwargs (“arcs/quarks”).
+- [x] Task detail layout: small cards (Execution flow, Relations) on top, big cards stacked for Overview/Result/Payload/Traceback.
+- [x] Improve top navbar secondary button contrast/visibility next to the primary button.
+- [x] Task list filters: quick time presets for last 5/10/30 minutes.
+- [x] Broker page: support multiple brokers/backends, show attached workers, add details for correct broker selection/purge.
+- [x] Beat schedule UI: quick select common intervals (hourly, every 10 min, daily, half-day, every 6h, every 3h, weekly); reduce manual cron typing.
+- [x] When page content is long the sidebar is shorter than the page looks bad
+- [x] json in result and payload is still not rendered formatted, but just as a string. that llooks bad
+- [x] in dashboard the 4 cards on top have more width than the area below thatss weird
+- [x] in the execution graph, please fixc that the nore content overflows the node size (e.g. the text of name an did is bigger than node) and on click add something that opens in place like a liitle clard / tooltip to see more details
+- [x] in the tasks table allow to sort it by state, worker, received, started and runtime
+- [x] in many places the section detail card does not have a margin around it. Find them all and fix
+- [x] please add proper readme

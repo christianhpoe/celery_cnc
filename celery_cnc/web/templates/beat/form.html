@@ -1,0 +1,188 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block content %}
+  <header class="page-section-header">
+    <div>
+      <p class="eyebrow">Beat schedules</p>
+      <h2>{{ title }}</h2>
+      <p>Define a schedule using a cron expression or interval.</p>
+    </div>
+  </header>
+
+  <section>
+    <form
+      method="post"
+      data-task-form
+      data-task-select="schedule-task"
+      data-app-select="schedule-worker"
+      data-args-input="schedule-args"
+      data-kwargs-input="schedule-kwargs"
+      data-param-container="schedule-params"
+      data-param-hint="schedule-param-hint"
+      data-json-toggle="schedule-use-json"
+      data-json-fields="schedule-json-fields"
+      data-param-card="schedule-param-card"
+      data-schema-id="task-schema-data"
+      data-schema-nested="true"
+      data-task-options="schema"
+      data-schedule-presets="true"
+      data-schedule-input="schedule-expression"
+    >
+      {% csrf_token %}
+      {% if schedule %}
+        <input type="hidden" name="schedule_id" value="{{ schedule.id }}" />
+      {% endif %}
+      <div class="filter-panel">
+        <div>
+          <label for="schedule-name">Name</label>
+          <input
+            id="schedule-name"
+            name="name"
+            type="text"
+            value="{{ schedule.name|default:'' }}"
+            required
+          />
+        </div>
+        <div>
+          <label for="schedule-worker">Worker</label>
+          {% if worker_labels %}
+            <input
+              type="search"
+              class="select-search"
+              placeholder="Search workers..."
+              aria-label="Search workers"
+              data-select-search
+              data-select-target="schedule-worker"
+            />
+            <select id="schedule-worker" name="worker" required>
+              <option value="">Select a worker</option>
+              {% for name in worker_labels %}
+                <option value="{{ name }}" {% if selected_worker == name %}selected{% endif %}>{{ name }}</option>
+              {% endfor %}
+            </select>
+          {% else %}
+            <p>No workers discovered. Configure CELERY_CNC_WORKERS.</p>
+            <select id="schedule-worker" name="worker" required disabled>
+              <option value="">No workers available</option>
+            </select>
+          {% endif %}
+        </div>
+        <div>
+          <label for="schedule-task">Task</label>
+          <input
+            type="search"
+            class="select-search"
+            placeholder="Search tasks..."
+            aria-label="Search tasks"
+            data-select-search
+            data-select-target="schedule-task"
+          />
+          <select
+            id="schedule-task"
+            name="task"
+            required
+            data-selected-task="{{ schedule.task|default:'' }}"
+          >
+            <option value="">Select a task</option>
+          </select>
+        </div>
+        <div>
+          <label for="schedule-expression">Schedule</label>
+          <input
+            id="schedule-expression"
+            name="schedule"
+            type="text"
+            value="{{ schedule.schedule|default:'' }}"
+            placeholder="*/5 * * * * or interval:60"
+            required
+          />
+        </div>
+        <div class="filter-presets filter-span">
+          <span class="detail-label">Quick schedule</span>
+          <div class="preset-buttons">
+            <button class="btn ghost btn-sm" type="button" data-schedule-preset="*/10 * * * *">
+              Every 10 min
+            </button>
+            <button class="btn ghost btn-sm" type="button" data-schedule-preset="0 * * * *">
+              Hourly
+            </button>
+            <button class="btn ghost btn-sm" type="button" data-schedule-preset="0 */3 * * *">
+              Every 3h
+            </button>
+            <button class="btn ghost btn-sm" type="button" data-schedule-preset="0 */6 * * *">
+              Every 6h
+            </button>
+            <button class="btn ghost btn-sm" type="button" data-schedule-preset="0 */12 * * *">
+              Half-day
+            </button>
+            <button class="btn ghost btn-sm" type="button" data-schedule-preset="0 0 * * *">
+              Daily
+            </button>
+            <button class="btn ghost btn-sm" type="button" data-schedule-preset="0 0 * * 0">
+              Weekly
+            </button>
+          </div>
+        </div>
+        <div>
+          <label>
+            <input
+              type="checkbox"
+              name="enabled"
+              {% if schedule is None or schedule.enabled %}checked{% endif %}
+            />
+            Enabled
+          </label>
+        </div>
+      </div>
+
+      <div class="form-toggle">
+        <label>
+          <input type="checkbox" id="schedule-use-json" />
+          Use raw JSON inputs instead
+        </label>
+        <span>Typed form auto-fills args/kwargs.</span>
+      </div>
+
+      <section class="detail-card" id="schedule-param-card">
+        <h3>Task inputs</h3>
+        <p class="detail-runtime" id="schedule-param-hint">Select a task to see its inputs.</p>
+        <div id="schedule-params" class="task-param-grid"></div>
+      </section>
+
+      <section class="detail-card" id="schedule-json-fields">
+        <h3>Advanced JSON</h3>
+        <div class="filter-panel">
+          <div>
+            <label for="schedule-args">Args (JSON list)</label>
+            <textarea
+              id="schedule-args"
+              name="args"
+              class="json-input"
+              rows="6"
+            >{{ schedule.args|default:'' }}</textarea>
+          </div>
+          <div>
+            <label for="schedule-kwargs">Kwargs (JSON object)</label>
+            <textarea
+              id="schedule-kwargs"
+              name="kwargs"
+              class="json-input"
+              rows="6"
+            >{{ schedule.kwargs|default:'' }}</textarea>
+          </div>
+        </div>
+      </section>
+
+      <div class="filter-actions">
+        <button class="btn accent" type="submit">Save schedule</button>
+      </div>
+    </form>
+  </section>
+{% endblock %}
+
+{% block scripts %}
+  {{ task_schemas|json_script:"task-schema-data" }}
+  <script src="{% static 'js/task-form.js' %}" defer></script>
+  <script src="{% static 'js/beat-form.js' %}" defer></script>
+{% endblock %}

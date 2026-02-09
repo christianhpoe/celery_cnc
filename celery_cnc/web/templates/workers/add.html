@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+
+{% block content %}
+  <header class="page-section-header">
+    <div>
+      <p class="eyebrow">Worker control</p>
+      <h2>Add worker</h2>
+      <p>Start a local worker process for a configured Celery app.</p>
+    </div>
+  </header>
+
+  <section class="detail-card">
+    <form method="post">
+      {% csrf_token %}
+      <div class="filter-panel">
+        <div>
+          <label for="worker-module">Worker app</label>
+          {% if options %}
+            <select id="worker-module" name="module" required>
+              <option value="">Select an app</option>
+              {% for option in options %}
+                <option value="{{ option.module }}">{{ option.label }}</option>
+              {% endfor %}
+            </select>
+          {% else %}
+            <p>No worker apps configured. Set CELERY_CNC_WORKERS.</p>
+          {% endif %}
+        </div>
+        <div>
+          <label for="worker-queue">Queue (optional)</label>
+          <input id="worker-queue" name="queue" type="text" placeholder="default" />
+        </div>
+        <div>
+          <label for="worker-name">Worker name (optional)</label>
+          <input id="worker-name" name="name" type="text" placeholder="worker@%h" />
+        </div>
+        <div>
+          <label for="worker-concurrency">Concurrency (optional)</label>
+          <input id="worker-concurrency" name="concurrency" type="number" min="1" />
+        </div>
+        <div class="filter-actions">
+          <button class="btn accent" type="submit" {% if not options %}disabled{% endif %}>Start worker</button>
+        </div>
+      </div>
+    </form>
+  </section>
+{% endblock %}

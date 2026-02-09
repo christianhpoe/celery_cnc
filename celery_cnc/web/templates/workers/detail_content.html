@@ -1,0 +1,443 @@
+{% load static %}
+
+<article class="detail-hero">
+  <div>
+    <p class="eyebrow">Worker detail</p>
+    <h2>{{ worker.hostname }}</h2>
+    <p class="detail-subtitle">
+      Status:
+      <span class="badge {{ worker.badge }}">{{ worker.status }}</span>
+      {% if last_seen is not None %}
+        · Last seen {{ last_seen|floatformat:0 }}s ago
+      {% endif %}
+    </p>
+  </div>
+  <div class="detail-status">
+    <span class="detail-runtime">{{ worker.active }} actively running</span>
+    <span class="detail-runtime">{{ worker.pool_size }} / {{ worker.concurrency }} concurrency</span>
+    <div class="detail-actions">
+      <form method="post" action="{% url 'worker-grow' worker.hostname %}">
+        {% csrf_token %}
+        <button class="btn ghost" type="submit">Grow pool</button>
+      </form>
+      <form method="post" action="{% url 'worker-shrink' worker.hostname %}">
+        {% csrf_token %}
+        <button class="btn ghost" type="submit">Shrink pool</button>
+      </form>
+      <form method="post" action="{% url 'worker-autoscale' worker.hostname %}">
+        {% csrf_token %}
+        <button class="btn ghost" type="submit">Autoscale</button>
+      </form>
+    </div>
+  </div>
+</article>
+
+{% if inspect_error %}
+  <p class="detail-runtime">{{ inspect_error }}</p>
+{% endif %}
+
+<section class="tabs" data-tabs>
+  <div class="tabs-list" role="tablist" aria-label="Worker sections">
+    <button
+      class="tabs-tab is-active"
+      type="button"
+      role="tab"
+      aria-selected="true"
+      aria-controls="tab-pool"
+      id="tab-pool-tab"
+      data-tab-target="tab-pool"
+    >
+      Pool
+    </button>
+    <button
+      class="tabs-tab"
+      type="button"
+      role="tab"
+      aria-selected="false"
+      aria-controls="tab-broker"
+      id="tab-broker-tab"
+      data-tab-target="tab-broker"
+    >
+      Broker
+    </button>
+    <button
+      class="tabs-tab"
+      type="button"
+      role="tab"
+      aria-selected="false"
+      aria-controls="tab-backend"
+      id="tab-backend-tab"
+      data-tab-target="tab-backend"
+    >
+      Backend
+    </button>
+    <button
+      class="tabs-tab"
+      type="button"
+      role="tab"
+      aria-selected="false"
+      aria-controls="tab-queues"
+      id="tab-queues-tab"
+      data-tab-target="tab-queues"
+    >
+      Queues
+    </button>
+    <button
+      class="tabs-tab"
+      type="button"
+      role="tab"
+      aria-selected="false"
+      aria-controls="tab-tasks"
+      id="tab-tasks-tab"
+      data-tab-target="tab-tasks"
+    >
+      Tasks
+    </button>
+    <button
+      class="tabs-tab"
+      type="button"
+      role="tab"
+      aria-selected="false"
+      aria-controls="tab-limits"
+      id="tab-limits-tab"
+      data-tab-target="tab-limits"
+    >
+      Limits
+    </button>
+    <button
+      class="tabs-tab"
+      type="button"
+      role="tab"
+      aria-selected="false"
+      aria-controls="tab-config"
+      id="tab-config-tab"
+      data-tab-target="tab-config"
+    >
+      Config
+    </button>
+    <button
+      class="tabs-tab"
+      type="button"
+      role="tab"
+      aria-selected="false"
+      aria-controls="tab-system"
+      id="tab-system-tab"
+      data-tab-target="tab-system"
+    >
+      System
+    </button>
+    {% if other_rows %}
+      <button
+        class="tabs-tab"
+        type="button"
+        role="tab"
+        aria-selected="false"
+        aria-controls="tab-other"
+        id="tab-other-tab"
+        data-tab-target="tab-other"
+      >
+        Other
+      </button>
+    {% endif %}
+  </div>
+
+  <div class="tabs-panel is-active" role="tabpanel" aria-labelledby="tab-pool-tab" id="tab-pool">
+    <section class="detail-grid">
+      <article class="detail-card">
+        <h3>Overview</h3>
+        <ul class="detail-metrics">
+          {% for row in overview %}
+            <li>
+              <span class="detail-label">{{ row.label }}</span>
+              <strong>{{ row.value }}</strong>
+            </li>
+          {% endfor %}
+        </ul>
+      </article>
+
+      <article class="detail-card">
+        <h3>Pool stats</h3>
+        {% if pool_rows %}
+          <div class="table-wrapper">
+            <table>
+              <thead>
+                <tr>
+                  <th>Setting</th>
+                  <th>Value</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for row in pool_rows %}
+                  <tr>
+                    <td>{{ row.label }}</td>
+                    <td>{{ row.value }}</td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        {% else %}
+          <p class="detail-runtime">No pool metadata available.</p>
+        {% endif %}
+      </article>
+    </section>
+  </div>
+
+  <div class="tabs-panel" role="tabpanel" aria-labelledby="tab-broker-tab" id="tab-broker">
+    <section class="detail-card">
+      <div class="detail-card-header">
+        <div>
+          <h3>Broker</h3>
+          {% if broker_type_label or broker_label %}
+            <p class="detail-runtime">
+              {{ broker_type_label|default:"Broker" }} · {{ broker_label|default:"default" }}
+            </p>
+          {% endif %}
+        </div>
+        {% if broker_key %}
+          <a class="btn ghost btn-sm" href="{% url 'broker-detail' broker_key %}">Open broker</a>
+        {% endif %}
+      </div>
+      {% if broker_rows %}
+        <div class="table-wrapper">
+          <table>
+            <thead>
+              <tr>
+                <th>Setting</th>
+                <th>Value</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for row in broker_rows %}
+                <tr>
+                  <td>{{ row.label }}</td>
+                  <td>{{ row.value }}</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% else %}
+        <p class="detail-runtime">No broker metadata available.</p>
+      {% endif %}
+    </section>
+  </div>
+
+  <div class="tabs-panel" role="tabpanel" aria-labelledby="tab-backend-tab" id="tab-backend">
+    <section class="detail-card">
+      <h3>Backend</h3>
+      {% if backend_rows %}
+        <div class="table-wrapper">
+          <table>
+            <thead>
+              <tr>
+                <th>Setting</th>
+                <th>Value</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for row in backend_rows %}
+                <tr>
+                  <td>{{ row.label }}</td>
+                  <td>{{ row.value }}</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% else %}
+        <p class="detail-runtime">No backend metadata available.</p>
+      {% endif %}
+    </section>
+  </div>
+
+  <div class="tabs-panel" role="tabpanel" aria-labelledby="tab-queues-tab" id="tab-queues">
+    <section class="detail-card">
+      <h3>Broker queues</h3>
+      {% if broker_queue_rows %}
+        {% include "brokers/_queue_table.html" with queue_rows=broker_queue_rows empty_message="No queues reported." %}
+      {% elif queue_rows %}
+        <div class="table-wrapper">
+          <table>
+            <thead>
+              <tr>
+                <th>Queue</th>
+                <th>Exchange</th>
+                <th>Routing key</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for queue in queue_rows %}
+                <tr>
+                  <td>{{ queue.name }}</td>
+                  <td>{{ queue.exchange|default:"—" }}</td>
+                  <td>{{ queue.routing_key|default:"—" }}</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% elif queues %}
+        <ul class="relation-list">
+          {% for queue in queues %}
+            <li>
+              <span>{{ queue }}</span>
+            </li>
+          {% endfor %}
+        </ul>
+      {% else %}
+        <p class="detail-runtime">No queue data available.</p>
+      {% endif %}
+    </section>
+  </div>
+
+  <div class="tabs-panel" role="tabpanel" aria-labelledby="tab-tasks-tab" id="tab-tasks">
+    <section class="detail-grid">
+      <article class="detail-card">
+        <h3>Task totals</h3>
+        {% if task_meta_rows %}
+          <ul class="detail-metrics">
+            {% for row in task_meta_rows %}
+              <li>
+                <span class="detail-label">{{ row.label }}</span>
+                <strong>{{ row.value }}</strong>
+              </li>
+            {% endfor %}
+          </ul>
+        {% else %}
+          <p class="detail-runtime">No task totals reported.</p>
+        {% endif %}
+      </article>
+
+      <article class="detail-card">
+        <h3>Active tasks</h3>
+        <ol class="relation-list">
+          {% for task in active_tasks %}
+            <li>
+              <span>{{ task.name }}</span>
+              <span class="badge {{ task.badge_class }}">{{ task.state }}</span>
+            </li>
+          {% empty %}
+            <li>
+              <span>No active tasks</span>
+            </li>
+          {% endfor %}
+        </ol>
+      </article>
+    </section>
+  </div>
+
+  <div class="tabs-panel" role="tabpanel" aria-labelledby="tab-limits-tab" id="tab-limits">
+    <section class="detail-card">
+      <h3>Task limits</h3>
+      {% if task_rows %}
+        <div class="table-wrapper">
+          <table>
+            <thead>
+              <tr>
+                <th>Task</th>
+                <th>Rate limit</th>
+                <th>Soft time limit</th>
+                <th>Time limit</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for task in task_rows %}
+                <tr>
+                  <td>{{ task.name }}</td>
+                  <td>{{ task.rate_limit|default:"—" }}</td>
+                  <td>{{ task.soft_time_limit|default:"—" }}</td>
+                  <td>{{ task.time_limit|default:"—" }}</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% else %}
+        <p class="detail-runtime">No registered task info returned.</p>
+      {% endif %}
+    </section>
+  </div>
+
+  <div class="tabs-panel" role="tabpanel" aria-labelledby="tab-config-tab" id="tab-config">
+    <section class="detail-card">
+      <h3>Config</h3>
+      {% if config_rows %}
+        <div class="table-wrapper">
+          <table>
+            <thead>
+              <tr>
+                <th>Setting</th>
+                <th>Value</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for row in config_rows %}
+                <tr>
+                  <td>{{ row.label }}</td>
+                  <td>{{ row.value }}</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% else %}
+        <p class="detail-runtime">No configuration metadata available.</p>
+      {% endif %}
+    </section>
+  </div>
+
+  <div class="tabs-panel" role="tabpanel" aria-labelledby="tab-system-tab" id="tab-system">
+    <section class="detail-card">
+      <h3>System</h3>
+      {% if system_rows %}
+        <div class="table-wrapper">
+          <table>
+            <thead>
+              <tr>
+                <th>Metric</th>
+                <th>Value</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for row in system_rows %}
+                <tr>
+                  <td>{{ row.label }}</td>
+                  <td>{{ row.value }}</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% else %}
+        <p class="detail-runtime">No system stats available.</p>
+      {% endif %}
+    </section>
+  </div>
+
+  {% if other_rows %}
+    <div class="tabs-panel" role="tabpanel" aria-labelledby="tab-other-tab" id="tab-other">
+      <section class="detail-card">
+        <h3>Other</h3>
+        <div class="table-wrapper">
+          <table>
+            <thead>
+              <tr>
+                <th>Metric</th>
+                <th>Value</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for row in other_rows %}
+                <tr>
+                  <td>{{ row.label }}</td>
+                  <td>{{ row.value }}</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+  {% endif %}
+</section>

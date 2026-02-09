@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block content %}
+  <section class="page-section-header">
+    <div>
+      <p class="eyebrow">404</p>
+      <h2>Page not found</h2>
+      <p>We could not find <code>{{ path }}</code>.</p>
+    </div>
+  </section>
+
+  <section class="detail-card">
+    <div class="empty-state">
+      <h3>Try a known view</h3>
+      <p>Go back to the dashboard or open the task list.</p>
+      <div class="empty-actions">
+        <a class="btn" href="{% url 'dashboard' %}">Dashboard</a>
+        <a class="btn ghost" href="{% url 'tasks' %}">Tasks</a>
+      </div>
+    </div>
+  </section>
+{% endblock %}

@@ -1,0 +1,381 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block content %}
+  <section class="tabs" data-tabs data-default-tab="tab-{{ default_tab }}">
+    <div class="tabs-list" role="tablist" aria-label="Task sections">
+      <button
+        class="tabs-tab"
+        type="button"
+        role="tab"
+        aria-selected="true"
+        aria-controls="tab-queue"
+        id="tab-queue-tab"
+        data-tab-target="tab-queue"
+        data-tab-url="{{ queue_tab_url }}"
+      >
+        Task Queue
+      </button>
+      <button
+        class="tabs-tab"
+        type="button"
+        role="tab"
+        aria-selected="false"
+        aria-controls="tab-stats"
+        id="tab-stats-tab"
+        data-tab-target="tab-stats"
+        data-tab-url="{{ stats_tab_url }}"
+      >
+        Task Stats
+      </button>
+    </div>
+
+    <div class="tabs-panel" role="tabpanel" aria-labelledby="tab-queue-tab" id="tab-queue">
+      <header class="page-section-header">
+        <div>
+          <p class="eyebrow">Task explorer</p>
+          <h2>Task queue</h2>
+          <p>Paginated and filterable list of all recorded task events.</p>
+        </div>
+        <div class="page-actions">
+          <a class="btn ghost" href="{% url 'task-submit' %}">Submit task</a>
+        </div>
+      </header>
+
+      <section class="filter-panel">
+        <form method="get" data-auto-submit="true" data-task-filter="true" data-utc-now="{{ utc_now|date:'c' }}">
+          <input type="hidden" name="page_size" value="{{ page_info.size }}" />
+          <input type="hidden" name="tab" value="queue" />
+          <div>
+            <label for="task-name-filter">Task name</label>
+            <select id="task-name-filter" name="task_name">
+              <option value="">Any</option>
+              {% for task_name in task_name_options %}
+                <option value="{{ task_name }}" {% if filters.task_name == task_name %}selected{% endif %}>
+                  {{ task_name }}
+                </option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <div>
+            <label for="state-filter">State</label>
+            <select id="state-filter" name="state">
+              <option value="">All</option>
+              {% for value,label in state_options %}
+                <option value="{{ value }}" {% if filters.state == value %}selected{% endif %}>
+                  {{ label }}
+                </option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <div>
+            <label for="worker-filter">Worker</label>
+            <select id="worker-filter" name="worker">
+              <option value="">Any</option>
+              {% for worker in worker_options %}
+                <option value="{{ worker }}" {% if filters.worker == worker %}selected{% endif %}>
+                  {{ worker }}
+                </option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <div>
+            <label for="search-filter">Search</label>
+            <input id="search-filter" type="search" name="search" value="{{ filters.search }}" placeholder="Task name, worker, id" />
+          </div>
+
+          <div>
+            <label for="start-filter">Start</label>
+            <input
+              id="start-filter"
+              type="datetime-local"
+              name="start"
+              value="{{ filters.start }}"
+              step="60"
+              data-time-start
+            />
+          </div>
+
+          <div>
+            <label for="end-filter">End</label>
+            <input
+              id="end-filter"
+              type="datetime-local"
+              name="end"
+              value="{{ filters.end }}"
+              step="60"
+              data-time-end
+            />
+          </div>
+
+          <div class="filter-presets">
+            <span class="detail-label">Quick range</span>
+            <div class="preset-buttons">
+              <button class="btn ghost btn-sm" type="button" data-time-preset="5">Last 5m</button>
+              <button class="btn ghost btn-sm" type="button" data-time-preset="10">Last 10m</button>
+              <button class="btn ghost btn-sm" type="button" data-time-preset="30">Last 30m</button>
+              <button class="btn ghost btn-sm" type="button" data-time-clear="true">Clear</button>
+            </div>
+          </div>
+          <input type="hidden" name="sort" value="{{ sort.key }}" />
+          <input type="hidden" name="dir" value="{{ sort.direction }}" />
+        </form>
+      </section>
+
+      <section class="table-meta">
+        <div class="table-summary">
+          Showing {{ page_info.visible_start }}–{{ page_info.visible_end }} of {{ page_info.total_count }}
+        </div>
+        <form class="page-size-form" method="get">
+          <input type="hidden" name="task_name" value="{{ filters.task_name }}" />
+          <input type="hidden" name="state" value="{{ filters.state }}" />
+          <input type="hidden" name="worker" value="{{ filters.worker }}" />
+          <input type="hidden" name="search" value="{{ filters.search }}" />
+          <input type="hidden" name="start" value="{{ filters.start }}" />
+          <input type="hidden" name="end" value="{{ filters.end }}" />
+          <input type="hidden" name="sort" value="{{ sort.key }}" />
+          <input type="hidden" name="dir" value="{{ sort.direction }}" />
+          <input type="hidden" name="tab" value="queue" />
+          <label for="page-size">Rows per page</label>
+          <select id="page-size" name="page_size" onchange="this.form.submit()">
+            {% for size in page_size_options %}
+              <option value="{{ size }}" {% if page_info.size == size %}selected{% endif %}>{{ size }}</option>
+            {% endfor %}
+          </select>
+        </form>
+      </section>
+
+      <section class="table-wrapper" data-search-term="{{ filters.search }}">
+        <table>
+          <thead>
+            <tr>
+              <th>Task</th>
+              <th>UID</th>
+              {% with header=sort_headers.state %}
+                <th{% if header.active %} aria-sort="{% if header.direction == 'asc' %}ascending{% else %}descending{% endif %}"{% endif %}>
+                  <a
+                    class="table-sort{% if header.active %} is-active{% endif %}{% if header.direction == 'desc' %} is-desc{% endif %}"
+                    href="{{ header.url }}"
+                  >
+                    {{ header.label }}
+                  </a>
+                </th>
+              {% endwith %}
+              {% with header=sort_headers.worker %}
+                <th{% if header.active %} aria-sort="{% if header.direction == 'asc' %}ascending{% else %}descending{% endif %}"{% endif %}>
+                  <a
+                    class="table-sort{% if header.active %} is-active{% endif %}{% if header.direction == 'desc' %} is-desc{% endif %}"
+                    href="{{ header.url }}"
+                  >
+                    {{ header.label }}
+                  </a>
+                </th>
+              {% endwith %}
+              {% with header=sort_headers.received %}
+                <th{% if header.active %} aria-sort="{% if header.direction == 'asc' %}ascending{% else %}descending{% endif %}"{% endif %}>
+                  <a
+                    class="table-sort{% if header.active %} is-active{% endif %}{% if header.direction == 'desc' %} is-desc{% endif %}"
+                    href="{{ header.url }}"
+                  >
+                    {{ header.label }}
+                  </a>
+                </th>
+              {% endwith %}
+              {% with header=sort_headers.started %}
+                <th{% if header.active %} aria-sort="{% if header.direction == 'asc' %}ascending{% else %}descending{% endif %}"{% endif %}>
+                  <a
+                    class="table-sort{% if header.active %} is-active{% endif %}{% if header.direction == 'desc' %} is-desc{% endif %}"
+                    href="{{ header.url }}"
+                  >
+                    {{ header.label }}
+                  </a>
+                </th>
+              {% endwith %}
+              {% with header=sort_headers.runtime %}
+                <th{% if header.active %} aria-sort="{% if header.direction == 'asc' %}ascending{% else %}descending{% endif %}"{% endif %}>
+                  <a
+                    class="table-sort{% if header.active %} is-active{% endif %}{% if header.direction == 'desc' %} is-desc{% endif %}"
+                    href="{{ header.url }}"
+                  >
+                    {{ header.label }}
+                  </a>
+                </th>
+              {% endwith %}
+            </tr>
+          </thead>
+          <tbody>
+            {% for task in tasks %}
+              <tr>
+                <td>
+                  <div class="task-info">
+                    <strong>
+                      <a href="{% url 'task-detail' task.task_id %}" data-highlightable>{{ task.name }}</a>
+                    </strong>
+                  </div>
+                </td>
+                <td>
+                  <small>{{ task.task_id }}</small>
+                </td>
+                <td>
+                  <span class="badge {{ task.badge_class }}">{{ task.state }}</span>
+                </td>
+                <td>{{ task.worker }}</td>
+                <td>
+                  {% if task.received %}
+                    <small>{{ task.received|date:"M d H:i" }}</small>
+                  {% else %}
+                    <small>—</small>
+                  {% endif %}
+                </td>
+                <td>
+                  {% if task.started %}
+                    <small>{{ task.started|date:"M d H:i" }}</small>
+                  {% else %}
+                    <small>—</small>
+                  {% endif %}
+                </td>
+                <td>
+                  {% if task.runtime is not None and task.done %}
+                    <span class="task-runtime">{{ task.runtime|floatformat:3 }}s</span>
+                  {% else %}
+                    <span class="task-runtime">—</span>
+                  {% endif %}
+                </td>
+              </tr>
+            {% empty %}
+              <tr>
+                <td colspan="7">No tasks matched your filters.</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </section>
+
+      <div class="pagination">
+        {% if prev_url %}
+          <a class="btn ghost" href="{{ prev_url }}&tab=queue">Prev</a>
+        {% else %}
+          <button class="btn ghost" type="button" disabled>Prev</button>
+        {% endif %}
+        <span>Page {{ page_info.current }} of {{ page_info.total }}</span>
+        {% if next_url %}
+          <a class="btn ghost" href="{{ next_url }}&tab=queue">Next</a>
+        {% else %}
+          <button class="btn ghost" type="button" disabled>Next</button>
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="tabs-panel" role="tabpanel" aria-labelledby="tab-stats-tab" id="tab-stats">
+      <header class="page-section-header">
+        <div>
+          <p class="eyebrow">Runtime insights</p>
+          <h2>Task stats</h2>
+          <p>Compare runtimes per task name to spot hotspots and regressions.</p>
+        </div>
+      </header>
+
+      <section class="filter-panel">
+        <form method="get">
+          <input type="hidden" name="tab" value="stats" />
+          <input type="hidden" name="stats_sort" value="{{ stats.sort.key }}" />
+          <input type="hidden" name="stats_dir" value="{{ stats.sort.direction }}" />
+          <label for="stats-task">Task</label>
+          <select id="stats-task" name="stats_task" onchange="this.form.submit()">
+            <option value="">All tasks</option>
+            {% for task_name in stats.options %}
+              <option value="{{ task_name }}" {% if stats.search == task_name %}selected{% endif %}>{{ task_name }}</option>
+            {% endfor %}
+          </select>
+        </form>
+      </section>
+
+      <section class="table-wrapper">
+        <table>
+          <thead>
+            <tr>
+              {% with header=stats.sort_headers.name %}
+                <th{% if header.active %} aria-sort="{% if header.direction == 'asc' %}ascending{% else %}descending{% endif %}"{% endif %}>
+                  <a class="table-sort{% if header.active %} is-active{% endif %}{% if header.direction == 'desc' %} is-desc{% endif %}" href="{{ header.url }}#tab-stats">
+                    {{ header.label }}
+                  </a>
+                </th>
+              {% endwith %}
+              {% with header=stats.sort_headers.count %}
+                <th{% if header.active %} aria-sort="{% if header.direction == 'asc' %}ascending{% else %}descending{% endif %}"{% endif %}>
+                  <a class="table-sort{% if header.active %} is-active{% endif %}{% if header.direction == 'desc' %} is-desc{% endif %}" href="{{ header.url }}#tab-stats">
+                    {{ header.label }}
+                  </a>
+                </th>
+              {% endwith %}
+              {% with header=stats.sort_headers.avg %}
+                <th{% if header.active %} aria-sort="{% if header.direction == 'asc' %}ascending{% else %}descending{% endif %}"{% endif %}>
+                  <a class="table-sort{% if header.active %} is-active{% endif %}{% if header.direction == 'desc' %} is-desc{% endif %}" href="{{ header.url }}#tab-stats">
+                    {{ header.label }}
+                  </a>
+                </th>
+              {% endwith %}
+              {% with header=stats.sort_headers.p95 %}
+                <th{% if header.active %} aria-sort="{% if header.direction == 'asc' %}ascending{% else %}descending{% endif %}"{% endif %}>
+                  <a class="table-sort{% if header.active %} is-active{% endif %}{% if header.direction == 'desc' %} is-desc{% endif %}" href="{{ header.url }}#tab-stats">
+                    {{ header.label }}
+                  </a>
+                </th>
+              {% endwith %}
+              {% with header=stats.sort_headers.p99 %}
+                <th{% if header.active %} aria-sort="{% if header.direction == 'asc' %}ascending{% else %}descending{% endif %}"{% endif %}>
+                  <a class="table-sort{% if header.active %} is-active{% endif %}{% if header.direction == 'desc' %} is-desc{% endif %}" href="{{ header.url }}#tab-stats">
+                    {{ header.label }}
+                  </a>
+                </th>
+              {% endwith %}
+              {% with header=stats.sort_headers.min %}
+                <th{% if header.active %} aria-sort="{% if header.direction == 'asc' %}ascending{% else %}descending{% endif %}"{% endif %}>
+                  <a class="table-sort{% if header.active %} is-active{% endif %}{% if header.direction == 'desc' %} is-desc{% endif %}" href="{{ header.url }}#tab-stats">
+                    {{ header.label }}
+                  </a>
+                </th>
+              {% endwith %}
+              {% with header=stats.sort_headers.max %}
+                <th{% if header.active %} aria-sort="{% if header.direction == 'asc' %}ascending{% else %}descending{% endif %}"{% endif %}>
+                  <a class="table-sort{% if header.active %} is-active{% endif %}{% if header.direction == 'desc' %} is-desc{% endif %}" href="{{ header.url }}#tab-stats">
+                    {{ header.label }}
+                  </a>
+                </th>
+              {% endwith %}
+              <th>Inspect</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in stats.rows %}
+              <tr>
+                <td><strong>{{ row.name }}</strong></td>
+                <td>{{ row.count }}</td>
+                <td>{% if row.avg is not None %}{{ row.avg|floatformat:3 }}s{% else %}—{% endif %}</td>
+                <td>{% if row.p95 is not None %}{{ row.p95|floatformat:3 }}s{% else %}—{% endif %}</td>
+                <td>{% if row.p99 is not None %}{{ row.p99|floatformat:3 }}s{% else %}—{% endif %}</td>
+                <td>{% if row.min is not None %}{{ row.min|floatformat:3 }}s{% else %}—{% endif %}</td>
+                <td>{% if row.max is not None %}{{ row.max|floatformat:3 }}s{% else %}—{% endif %}</td>
+                <td>
+                  <a class="table-link" href="{{ row.link }}&tab=queue">View runs</a>
+                </td>
+              </tr>
+            {% empty %}
+              <tr>
+                <td colspan="8">No tasks matched your search.</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </section>
+    </div>
+  </section>
+{% endblock %}
+
+{% block scripts %}
+  <script src="{% static 'js/tabs.js' %}" defer></script>
+  <script src="{% static 'js/task-list.js' %}" defer></script>
+{% endblock %}

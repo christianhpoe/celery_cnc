@@ -1,0 +1,131 @@
+{% if brokers %}
+  <section class="tabs" data-tabs>
+    <div class="tabs-list" role="tablist" aria-label="Broker targets">
+      {% for broker in brokers %}
+        <button
+          class="tabs-tab{% if forloop.first %} is-active{% endif %}"
+          type="button"
+          role="tab"
+          aria-selected="{% if forloop.first %}true{% else %}false{% endif %}"
+          aria-controls="broker-{{ forloop.counter }}"
+          id="broker-{{ forloop.counter }}-tab"
+          data-tab-target="broker-{{ forloop.counter }}"
+        >
+          {{ broker.broker_label }}
+        </button>
+      {% endfor %}
+    </div>
+
+    {% for broker in brokers %}
+      <div
+        class="tabs-panel{% if forloop.first %} is-active{% endif %}"
+        role="tabpanel"
+        aria-labelledby="broker-{{ forloop.counter }}-tab"
+        id="broker-{{ forloop.counter }}"
+      >
+        <section class="broker-group">
+          <article class="detail-card detail-card--stacked">
+            <h3>Broker target</h3>
+            <div class="broker-meta">
+              <div>
+                <strong class="broker-title">{{ broker.broker_label }}</strong>
+                <p class="broker-subtitle">Primary app: {{ broker.primary_app }}</p>
+              </div>
+              <div class="broker-actions">
+                <form method="post" action="{% url 'broker-purge-idle' %}">
+                  {% csrf_token %}
+                  <input type="hidden" name="app" value="{{ broker.primary_app }}" />
+                  <button class="btn ghost" type="submit">Purge idle</button>
+                </form>
+              </div>
+            </div>
+            <ul class="detail-metrics">
+              <li>
+                <span class="detail-label">Broker URL</span>
+                <strong>{{ broker.broker_label }}</strong>
+              </li>
+              <li>
+                <span class="detail-label">Result backends</span>
+                <strong>{{ broker.backend_labels|join:", "|default:"—" }}</strong>
+              </li>
+              <li>
+                <span class="detail-label">Apps</span>
+                <strong>{{ broker.app_names|join:", "|default:"—" }}</strong>
+              </li>
+              <li>
+                <span class="detail-label">Attached workers</span>
+                <strong>{{ broker.workers|join:", "|default:"—" }}</strong>
+              </li>
+            </ul>
+          </article>
+
+          <section class="summary-grid">
+            {% for card in broker.summary %}
+              <article class="summary-card">
+                <small>{{ card.label }}</small>
+                <h3>{{ card.value }}</h3>
+              </article>
+            {% endfor %}
+          </section>
+
+          <section class="table-wrapper">
+            <table>
+              <thead>
+                <tr>
+                  <th>Queue</th>
+                  <th>Pending</th>
+                  <th>Consumers</th>
+                  <th>Rate</th>
+                  <th>Idle</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for queue in broker.queues %}
+                  <tr>
+                    <td>{{ queue.name }}</td>
+                    <td><strong>{{ queue.pending }}</strong></td>
+                    <td>{{ queue.consumers|default:"—" }}</td>
+                    <td>{{ queue.rate|default:"—" }}</td>
+                    <td>
+                      {% if queue.idle_seconds is not None %}
+                        <small>{{ queue.idle_seconds }}s</small>
+                      {% else %}
+                        <small>—</small>
+                      {% endif %}
+                    </td>
+                    <td>
+                      <form method="post" action="{% url 'broker-purge' %}">
+                        {% csrf_token %}
+                        <input type="hidden" name="app" value="{{ broker.primary_app }}" />
+                        <input type="hidden" name="queue" value="{{ queue.name }}" />
+                        <button class="btn ghost" type="submit">Purge</button>
+                      </form>
+                    </td>
+                  </tr>
+                {% empty %}
+                  <tr>
+                    <td colspan="6">No queues found for this broker.</td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </section>
+        </section>
+      </div>
+    {% endfor %}
+  </section>
+{% else %}
+  <section class="detail-card">
+    <h3>Broker activity</h3>
+    <p>No Celery apps are configured to inspect brokers.</p>
+  </section>
+{% endif %}
+
+<section class="detail-card">
+  <h3>Broker activity</h3>
+  <p>
+    Last refreshed at {{ last_updated|time:"H:i:s" }} ({{ last_updated|date:"M d, Y" }}).
+    Refresh manually to query the broker again.
+  </p>
+</section>

@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block content %}
+  <section class="detail-card loading-card" data-dashboard-loading>
+    <div class="loading-indicator" aria-hidden="true">
+      <span class="spinner"></span>
+      <span>Loading dashboard data...</span>
+    </div>
+  </section>
+
+  <div id="dashboard-content" data-dashboard-fragment="{% url 'dashboard-fragment' %}"></div>
+  <noscript>
+    <section class="detail-card">
+      <h3>Dashboard</h3>
+      <p>Enable JavaScript to load dashboard data.</p>
+    </section>
+  </noscript>
+{% endblock %}
+
+{% block scripts %}
+  <script src="{% static 'js/dashboard.js' %}" defer></script>
+  <script src="{% static 'js/dashboard-workers.js' %}" defer></script>
+{% endblock %}

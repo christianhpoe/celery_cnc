@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+
+{% block content %}
+  <article class="detail-hero">
+    <div>
+      <p class="eyebrow">Kafka broker</p>
+      <h2>{{ broker.broker_label }}</h2>
+      <p class="detail-subtitle">
+        Kafka · Backends: {{ broker.backend_labels|join:", "|default:"—" }}
+      </p>
+    </div>
+    <div class="detail-status">
+      <span class="detail-runtime">{{ broker.queues|length }} topics</span>
+      <span class="detail-runtime">{{ broker.workers|length }} workers attached</span>
+    </div>
+  </article>
+
+  <section class="detail-card">
+    <h3>Queues</h3>
+    {% include "brokers/_queue_table.html" with queue_rows=broker.queues empty_message="No topics reported." %}
+  </section>
+
+  <section class="detail-card">
+    <h3>Notes</h3>
+    <p class="detail-runtime">
+      Kafka queue depth and rates are broker-specific; this view shows best-effort counts.
+    </p>
+  </section>
+{% endblock %}
