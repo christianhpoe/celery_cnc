@@ -19,7 +19,14 @@ export CELERY_CNC_WORKERS
 export CELERY_CNC_WEB_HOST
 export CELERY_CNC_WEB_PORT
 
-.PHONY: install lint
+.PHONY: build build_frontend \
+ 		install \
+ 		lint
+
+build_frontend:
+	npm --prefix frontend/graph-ui run build
+
+build: build_frontend
 
 install:
 	uv sync --all-extras --dev --frozen
@@ -49,7 +56,6 @@ demo_tasks:
 demo_graph_tasks:
 	uv run python demo/schedule_demo_tasks.py
 
-demo_cnc:
-	npm --prefix frontend/graph-ui run build
+demo_cnc: build
 	uv run python celery_cnc/web/manage.py migrate
 	uv run python demo/main.py
