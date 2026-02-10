@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+
+{% block content %}
+  <header class="page-section-header">
+    <div>
+      <p class="eyebrow">Metrics</p>
+      <h2>Prometheus</h2>
+      <p>Exporter status and scrape configuration.</p>
+    </div>
+  </header>
+
+  <section class="detail-card">
+    <h3>Exporter Status</h3>
+    <p class="detail-runtime">
+      Status:
+      <span
+        class="badge {% if component.status == 'up' %}badge-success{% elif component.status == 'down' %}badge-danger{% elif component.status == 'configured' %}badge-info{% else %}badge-muted{% endif %}"
+      >
+        {{ component.status }}
+      </span>
+    </p>
+    {% if component.pid %}
+      <p class="detail-runtime">Process PID: {{ component.pid }}</p>
+    {% endif %}
+  </section>
+
+  <section class="detail-card">
+    <h3>Scrape Endpoint</h3>
+    <p class="detail-runtime">Path: {{ component.config.path }}</p>
+    <p class="detail-runtime">Port: {{ component.config.port }}</p>
+    {% if component.url %}
+      <p>
+        <a class="btn" href="{{ component.url }}" target="_blank" rel="noreferrer noopener">Open /metrics</a>
+      </p>
+    {% endif %}
+  </section>
+{% endblock %}

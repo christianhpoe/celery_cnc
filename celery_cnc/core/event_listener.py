@@ -14,9 +14,9 @@ from celery.events import EventReceiver
 from kombu.exceptions import OperationalError
 
 from celery_cnc.config import set_settings
-from celery_cnc.db.models import TaskEvent, TaskRelation, WorkerEvent
-from celery_cnc.logging.setup import configure_process_logging
-from celery_cnc.logging.utils import sanitize_component
+from celery_cnc.core.db.models import TaskEvent, TaskRelation, WorkerEvent
+from celery_cnc.core.logging.setup import configure_process_logging
+from celery_cnc.core.logging.utils import sanitize_component
 
 if TYPE_CHECKING:
     from celery_cnc.config import CeleryCnCConfig

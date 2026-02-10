@@ -8,7 +8,7 @@ if TYPE_CHECKING:
 
     from celery import Celery
 
-from celery_cnc.cnc import broker
+from celery_cnc.core.engine.brokers import base as broker
 from celery_cnc.core.registry import WorkerRegistry
 
 

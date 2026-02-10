@@ -1,0 +1,152 @@
+{% load static %}
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>{{ title|default:"Celery CnC" }}</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="icon" href="{% static 'favicon.svg' %}" type="image/svg+xml" />
+    <link rel="stylesheet" href="{% static 'css/app.css' %}" />
+    {% block head_extras %}{% endblock %}
+  </head>
+
+  <body class="page-{{ request.resolver_match.url_name|default:'default' }}">
+    <div class="layout" id="layout-root">
+      <aside class="sidebar" id="primary-sidebar">
+        <div class="sidebar-brand">Celery CNC</div>
+        {% with current_url=request.resolver_match.url_name %}
+          <nav class="sidebar-nav">
+            <a
+              href="{% url 'dashboard' %}"
+              class="nav-link nav-link--dashboard {% if current_url == 'dashboard' %}is-active{% endif %}"
+            >
+              Dashboard
+            </a>
+            <a
+              href="{% url 'tasks' %}"
+              class="nav-link nav-link--tasks {% if current_url == 'tasks' %}is-active{% endif %}"
+            >
+              Tasks
+            </a>
+            <a
+              href="{% url 'workers' %}"
+              class="nav-link nav-link--workers {% if current_url == 'workers' or current_url == 'worker-detail' %}is-active{% endif %}"
+            >
+              Workers
+            </a>
+            {% if component_nav.beat %}
+              <a
+                href="{% url 'beat' %}"
+                class="nav-link nav-link--beat {% if current_url == 'beat' %}is-active{% endif %}"
+              >
+                Beat
+              </a>
+            {% endif %}
+            {% if component_nav.prometheus %}
+              <a
+                href="{% url 'prometheus' %}"
+                class="nav-link nav-link--prometheus {% if current_url == 'prometheus' %}is-active{% endif %}"
+              >
+                Prometheus
+              </a>
+            {% endif %}
+            {% if component_nav.open_telemetry %}
+              <a
+                href="{% url 'opentelemetry' %}"
+                class="nav-link nav-link--opentelemetry {% if current_url == 'opentelemetry' %}is-active{% endif %}"
+              >
+                OpenTelemetry
+              </a>
+            {% endif %}
+            <a
+              href="{% url 'settings' %}"
+              class="nav-link nav-link--settings {% if current_url == 'settings' %}is-active{% endif %}"
+            >
+              Settings
+            </a>
+            <a
+              href="{% url 'logs' %}"
+              class="nav-link nav-link--logs {% if current_url == 'logs' %}is-active{% endif %}"
+            >
+              Logs
+            </a>
+          </nav>
+        {% endwith %}
+      </aside>
+
+      <div class="main-area">
+        <header class="top-bar">
+          <div>
+            <p class="eyebrow">Command & Control</p>
+            <h1 class="page-title">{{ title|default:"Celery CnC" }}</h1>
+          </div>
+          <div class="top-actions">
+            <button class="btn ghost sidebar-toggle" type="button" aria-label="Toggle navigation">
+              <span class="hamburger"></span>
+            </button>
+            <a
+              class="btn ghost github-inline"
+              href="https://github.com/christianhpoe/celery_cnc"
+              target="_blank"
+              rel="noreferrer noopener"
+              aria-label="Open celery_cnc on GitHub"
+            >
+              <svg class="github-icon" viewBox="0 0 24 24" role="img" aria-hidden="true">
+                <path
+                  d="M12 .5C5.65.5.5 5.65.5 12c0 5.1 3.3 9.4 7.9 10.9.6.1.8-.2.8-.5v-1.8c-3.2.7-3.9-1.5-3.9-1.5-.6-1.3-1.4-1.6-1.4-1.6-1.1-.8.1-.8.1-.8 1.2.1 1.8 1.2 1.8 1.2 1 .1.6 1.9 2.9 1.4.1-.8.4-1.3.7-1.6-2.6-.3-5.4-1.3-5.4-5.9 0-1.3.5-2.4 1.2-3.3-.1-.3-.5-1.6.1-3.4 0 0 1-.3 3.4 1.2a11.7 11.7 0 0 1 6.1 0c2.3-1.5 3.3-1.2 3.3-1.2.6 1.8.2 3.1.1 3.4.8.9 1.2 2 1.2 3.3 0 4.6-2.8 5.6-5.4 5.9.4.3.8 1 .8 2v3c0 .3.2.6.8.5 4.6-1.5 7.9-5.8 7.9-10.9C23.5 5.6 18.3.5 12 .5Z"
+                />
+              </svg>
+            </a>
+          </div>
+        </header>
+
+        <main class="content">
+          {% block content %}{% endblock %}
+        </main>
+
+        <footer class="page-footer">
+          <p>Celery Command & Control · {% now "Y" %}</p>
+        </footer>
+      </div>
+
+      <div class="layout-overlay" id="layout-overlay"></div>
+    </div>
+
+    <div
+      class="modal-overlay is-hidden"
+      id="modal-overlay"
+      role="dialog"
+      aria-modal="true"
+      aria-hidden="true"
+      hidden
+    >
+      <div class="modal" role="document">
+        <div class="modal-header">
+          <h3 id="modal-title">Details</h3>
+          <button class="btn ghost btn-sm" type="button" id="modal-close" data-modal-close="true">
+            Close
+          </button>
+        </div>
+        <div class="modal-body">
+          <pre class="modal-pre" id="modal-content"></pre>
+        </div>
+      </div>
+    </div>
+
+    <script src="{% static 'vendor/chart.js' %}"></script>
+    <script src="{% static 'js/theme.js' %}" defer></script>
+    <script src="{% static 'js/expand-modal.js' %}" defer></script>
+    <script src="{% static 'js/layout.js' %}" defer></script>
+    <script src="{% static 'js/charts.js' %}" defer></script>
+    <script src="{% static 'js/search.js' %}" defer></script>
+    <script src="{% static 'js/filter-form.js' %}" defer></script>
+    <script src="{% static 'js/select-search.js' %}" defer></script>
+    {% block scripts %}{% endblock %}
+  </body>
+</html>

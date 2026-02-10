@@ -4,9 +4,9 @@ from datetime import UTC, datetime
 
 from prometheus_client import CollectorRegistry
 
-from celery_cnc.db.models import TaskEvent, TaskStats, WorkerEvent
-from celery_cnc.monitoring.otel import OTelExporter
-from celery_cnc.monitoring.prometheus import PrometheusExporter
+from celery_cnc.components.metrics.opentelemetry import OTelExporter
+from celery_cnc.components.metrics.prometheus import PrometheusExporter
+from celery_cnc.core.db.models import TaskEvent, TaskStats, WorkerEvent
 
 
 def test_prometheus_exporter_records_metrics() -> None:

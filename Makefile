@@ -68,5 +68,5 @@ demo_graph_tasks:
 	uv run python demo/schedule_demo_tasks.py
 
 demo_cnc: build
-	uv run python celery_cnc/web/manage.py migrate
+	uv run python celery_cnc/components/web/manage.py migrate
 	uv run python demo/main.py
