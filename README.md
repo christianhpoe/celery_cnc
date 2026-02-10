@@ -105,6 +105,46 @@ cnc = CeleryCnC("your_app.celery:app")
 cnc.run()
 ```
 
+## MCP server (AI tools)
+
+Celery CnC ships with an optional MCP server that exposes read-only tools over HTTP.
+It is designed to let MCP clients (Codex CLI, Claude Code, etc.) inspect the CnC
+SQLite store safely without write access.
+
+How it works:
+
+- The MCP server runs as a separate process when `CELERY_CNC_MCP_ENABLED=1`.
+- Requests are served from the CnC SQLite store using a read-only SQLAlchemy engine.
+- Tools include schema discovery, limited SQL querying (SELECT/WITH only), and a
+  dashboard stats payload that matches the web UI.
+- Authentication is enforced with a static bearer token (`CELERY_CNC_MCP_AUTH_KEY`).
+- The web Settings page renders copy/paste snippets for MCP client configuration
+  and CLI commands for Codex + Claude.
+
+Configuration:
+
+- `CELERY_CNC_MCP_ENABLED`: Enable the MCP server (`1`/`true`).
+- `CELERY_CNC_MCP_HOST`: Host interface (default: `127.0.0.1`).
+- `CELERY_CNC_MCP_PORT`: Port (default: `9100`).
+- `CELERY_CNC_MCP_PATH`: Base path (default: `/mcp/`).
+- `CELERY_CNC_MCP_AUTH_KEY`: Required auth token for clients.
+- `CELERY_CNC_MCP_READONLY_DB_URL`: Optional read-only database URL (defaults to
+  SQLite read-only mode using `CELERY_CNC_DB_PATH`). If you provide a regular
+  database URL via `CELERY_CNC_MCP_READONLY_DB_URL`, it is used as-is; ensure
+  the credentials are truly read-only or queries will not be protected by the
+  database itself.
+
+Example:
+
+```bash
+export CELERY_CNC_MCP_ENABLED=1
+export CELERY_CNC_MCP_AUTH_KEY="your-secret-token"
+```
+
+Start the supervisor (or MCP server) and then open the Settings page to grab the
+client config snippets. The page includes JSON config for MCP clients plus CLI
+examples for Codex and Claude.
+
 ## Development
 
 Run checks locally:
