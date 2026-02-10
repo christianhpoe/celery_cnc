@@ -227,13 +227,22 @@ class ProcessManager:
             self._controller_factory,
             self._config,
         )
-        for broker_url in self._registry.get_brokers():
+        backend_map: dict[str, str] = {}
+        broker_groups = self._registry.get_brokers()
+        for broker_url, group in broker_groups.items():
+            backends = {str(app.conf.result_backend) if app.conf.result_backend else "" for app in group.apps}
+            backend_map[broker_url] = next(iter(backends)) if len(backends) == 1 else "multiple"
+        for broker_url in broker_groups:
             name = f"event_listener:{broker_url}"
             self._process_factories[name] = functools.partial(EventListener, broker_url, self._queue, self._config)
         if self._config.prometheus:
             self._process_factories["prometheus"] = functools.partial(
                 _ExporterProcess,
-                functools.partial(PrometheusExporter, port=self._config.prometheus_port),
+                functools.partial(
+                    PrometheusExporter,
+                    port=self._config.prometheus_port,
+                    broker_backend_map=backend_map,
+                ),
                 self._config,
                 "prometheus",
             )

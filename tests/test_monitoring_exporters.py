@@ -27,16 +27,37 @@ def test_prometheus_exporter_records_metrics() -> None:
     exporter.update_stats(TaskStats(min_runtime=0.1, max_runtime=1.0, avg_runtime=0.4, p95=0.8, p99=0.95))
 
     total = registry.get_sample_value(
-        "celery_cnc_tasks_total",
-        labels={"state": "SUCCESS", "worker": "w1", "name": "demo.add"},
+        "flower_events_total",
+        labels={
+            "task": "demo.add",
+            "type": "task-succeeded",
+            "worker": "w1",
+            "broker": "unknown",
+            "backend": "unknown",
+        },
     )
     assert total == 1
 
-    runtime_count = registry.get_sample_value("celery_cnc_task_runtime_seconds_count")
+    runtime_count = registry.get_sample_value(
+        "flower_task_runtime_seconds_count",
+        labels={
+            "task": "demo.add",
+            "worker": "w1",
+            "broker": "unknown",
+            "backend": "unknown",
+        },
+    )
     assert runtime_count == 1
 
-    min_val = registry.get_sample_value("celery_cnc_task_runtime_min_seconds")
-    assert min_val == 0.1
+    online = registry.get_sample_value(
+        "flower_worker_online",
+        labels={
+            "worker": "w1",
+            "broker": "unknown",
+            "backend": "unknown",
+        },
+    )
+    assert online == 1
 
 
 def test_otel_exporter_records_spans() -> None:
