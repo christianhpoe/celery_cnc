@@ -1,46 +1,12 @@
 SHELL := /bin/sh
 
-BROKER1_URL ?= amqp://guest:guest@localhost:5672//
-BACKEND1_URL ?= redis://localhost:6379/0
-BROKER2_URL ?= amqp://guest:guest@localhost:5673//
-BACKEND2_URL ?= redis://localhost:6380/0
-BROKER3_URL ?= redis://localhost:6381/0
-BACKEND3_URL ?= db+postgresql://postgres:postgres@localhost:5432/postgres
-
-CELERY_CNC_DB_PATH ?= celery_cnc.db
-CELERY_CNC_WORKERS ?= demo.worker_math:app,demo.worker_text:app,demo.worker_sleep:app
-CELERY_CNC_WEB_HOST ?= 127.0.0.1
-CELERY_CNC_WEB_PORT ?= 8000
-
-export BROKER_URL
-export BACKEND_URL
-export CELERY_CNC_DB_PATH
-export CELERY_CNC_WORKERS
-export CELERY_CNC_WEB_HOST
-export CELERY_CNC_WEB_PORT
-
 .PHONY: build \
- 		install \
- 		lint
-
-clean:
-	rm -rf demo/data/logs
-
-FRONTEND_OUT := celery_cnc/web/static/graph/graph.js \
-	celery_cnc/web/static/graph/graph.css
-FRONTEND_SRC := $(shell find frontend/graph-ui/src -type f)
-FRONTEND_DEPS := frontend/graph-ui/package.json \
-	frontend/graph-ui/package-lock.json \
-	frontend/graph-ui/tsconfig.json \
-	frontend/graph-ui/vite.config.ts \
-	$(FRONTEND_SRC)
-
-$(FRONTEND_OUT): $(FRONTEND_DEPS)
-	npm --prefix frontend/graph-ui run build
-
-build_frontend: $(FRONTEND_OUT)
-
-build: build_frontend
+		dist \
+		dist_clean \
+		install \
+		lint \
+		publish \
+		publish_test
 
 install_frontend:
 	npm --prefix frontend/graph-ui install
@@ -50,6 +16,20 @@ install_backend:
 	uv run pre-commit install
 
 install: install_backend install_frontend
+
+clean:
+	rm -rf demo/data/logs
+
+build_frontend: install_frontend
+	npm --prefix frontend/graph-ui run build
+
+build: build_frontend
+
+dist: build_frontend
+	uv build --no-sources
+
+dist_clean:
+	rm -rf dist
 
 lint:
 	CELERY_CNC_WORKERS= uv run pre-commit run --all-files
