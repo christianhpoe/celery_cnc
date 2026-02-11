@@ -6,12 +6,23 @@ import functools
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from .config import CeleryCnCConfig, get_settings, set_settings
+from .config import (
+    BeatConfig,
+    CeleryCnCConfig,
+    DatabaseConfigSqlite,
+    FrontendConfig,
+    LoggingConfigFile,
+    McpConfig,
+    OpenTelemetryConfig,
+    PrometheusConfig,
+    get_settings,
+    set_settings,
+)
+from .core.db.adapters.base import BaseDBController
+from .core.db.adapters.memory import MemoryController
+from .core.db.adapters.sqlite import SQLiteController
 from .core.process_manager import ProcessManager
 from .core.registry import WorkerRegistry
-from .db.abc import BaseDBController
-from .db.memory import MemoryController
-from .db.sqlite import SQLiteController
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -39,9 +50,21 @@ class CeleryCnC:
         if retention_days is not None:
             if retention_days <= 0:
                 raise ValueError(_RETENTION_ARG_POSITIVE_ERROR)
-            config = config.model_copy(update={"retention_days": retention_days})
+            config = config.model_copy(
+                update={
+                    "database": config.database.model_copy(
+                        update={"retention_days": retention_days},
+                    ),
+                },
+            )
         if purge_db is not None:
-            config = config.model_copy(update={"purge_db": purge_db})
+            config = config.model_copy(
+                update={
+                    "database": config.database.model_copy(
+                        update={"purge_db": purge_db},
+                    ),
+                },
+            )
 
         set_settings(config)
         self.config = config
@@ -49,8 +72,10 @@ class CeleryCnC:
         self._db_controller = db_controller
         self._process_manager: ProcessManager | None = None
         self._ensure_sqlite_db_path()
-        if self.config.purge_db:
+        if self.config.database.purge_db:
             self._purge_existing_db()
+        if self.config.beat is not None and self.config.beat.delete_schedules_on_boot:
+            self._purge_schedule_file()
 
     def run(self) -> None:
         """Start all subprocesses and block until shutdown."""
@@ -63,14 +88,14 @@ class CeleryCnC:
         if self._db_controller is not None and callable(self._db_controller):
             return self._db_controller
         if isinstance(self._db_controller, SQLiteController):
-            path = getattr(self._db_controller, "_path", self.config.db_path)
+            path = getattr(self._db_controller, "_path", self.config.database.db_path)
             return functools.partial(_make_sqlite_controller, path)
         if isinstance(self._db_controller, MemoryController):
             return functools.partial(_return_controller, self._db_controller)
         if isinstance(self._db_controller, BaseDBController):
             controller = self._db_controller
             return functools.partial(_return_controller, controller)
-        return functools.partial(_make_sqlite_controller, self.config.db_path)
+        return functools.partial(_make_sqlite_controller, self.config.database.db_path)
 
     def _ensure_sqlite_db_path(self) -> None:
         controller = self._db_controller
@@ -78,14 +103,14 @@ class CeleryCnC:
             if isinstance(controller, SQLiteController):
                 raw_path = getattr(controller, "_path", None)
                 if raw_path is not None:
-                    self.config.db_path = Path(raw_path).expanduser().resolve()
+                    self.config.database.db_path = Path(raw_path).expanduser().resolve()
                 return
             if isinstance(controller, BaseDBController) or callable(controller):
                 return
 
-        path = Path(self.config.db_path).expanduser()
+        path = Path(self.config.database.db_path).expanduser()
         path = (Path.cwd() / path).resolve() if not path.is_absolute() else path.resolve()
-        self.config.db_path = path
+        self.config.database.db_path = path
 
     def _purge_existing_db(self) -> None:
         path = self._resolve_purge_path()
@@ -106,11 +131,30 @@ class CeleryCnC:
     def _resolve_purge_path(self) -> Path | None:
         controller = self._db_controller
         if controller is None:
-            return self.config.db_path
+            return self.config.database.db_path
         if isinstance(controller, SQLiteController):
             raw_path = getattr(controller, "_path", None)
-            return Path(raw_path) if raw_path is not None else self.config.db_path
+            return Path(raw_path) if raw_path is not None else self.config.database.db_path
         return None
+
+    def _purge_schedule_file(self) -> None:
+        beat_config = self.config.beat
+        if beat_config is None:
+            return
+        schedule_path = beat_config.schedule_path
+        if schedule_path is None:
+            return
+        resolved = Path(schedule_path).expanduser().resolve()
+        if not resolved.exists():
+            return
+        if resolved.is_dir():
+            msg = f"Beat schedule path points to a directory: {resolved}"
+            raise RuntimeError(msg)
+        try:
+            resolved.unlink()
+        except OSError as exc:  # pragma: no cover - depends on OS permissions
+            msg = f"Failed to purge beat schedule file at {resolved}: {exc}"
+            raise RuntimeError(msg) from exc
 
 
 def _make_sqlite_controller(path: Path) -> BaseDBController:
@@ -123,4 +167,14 @@ def _return_controller(controller: BaseDBController) -> BaseDBController:
     return controller
 
 
-__all__ = ["CeleryCnC", "CeleryCnCConfig", "CnCConfig"]
+__all__ = [
+    "BeatConfig",
+    "CeleryCnC",
+    "CeleryCnCConfig",
+    "DatabaseConfigSqlite",
+    "FrontendConfig",
+    "LoggingConfigFile",
+    "McpConfig",
+    "OpenTelemetryConfig",
+    "PrometheusConfig",
+]

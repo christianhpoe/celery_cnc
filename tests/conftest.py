@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import secrets
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
@@ -8,9 +9,17 @@ import django
 import pytest
 from django.test import Client
 
-from celery_cnc.config import reset_settings
-from celery_cnc.db.models import Schedule, TaskEvent, WorkerEvent
-from celery_cnc.db.sqlite import SQLiteController
+from celery_cnc.config import (
+    BeatConfig,
+    CeleryCnCConfig,
+    DatabaseConfigSqlite,
+    FrontendConfig,
+    LoggingConfigFile,
+    reset_settings,
+    set_settings,
+)
+from celery_cnc.core.db.adapters.sqlite import SQLiteController
+from celery_cnc.core.db.models import Schedule, TaskEvent, WorkerEvent
 from tests.fixtures.app_one import app as app_one
 from tests.fixtures.app_two import app as app_two
 
@@ -33,9 +42,17 @@ def celery_app_two() -> Celery:
 @pytest.fixture(scope="session")
 def web_client(tmp_path_factory: pytest.TempPathFactory) -> Client:
     db_path = tmp_path_factory.mktemp("celery_cnc") / "celery_cnc.db"
-    os.environ.setdefault("DJANGO_SETTINGS_MODULE", "celery_cnc.web.settings")
-    os.environ["CELERY_CNC_DB_PATH"] = str(db_path)
+    log_dir = tmp_path_factory.mktemp("celery_cnc_logs")
+    os.environ.setdefault("DJANGO_SETTINGS_MODULE", "celery_cnc.components.web.settings")
     reset_settings()
+    set_settings(
+        CeleryCnCConfig(
+            logging=LoggingConfigFile(log_dir=log_dir),
+            database=DatabaseConfigSqlite(db_path=db_path),
+            beat=BeatConfig(),
+            frontend=FrontendConfig(secret_key=secrets.token_urlsafe(32), debug=False),
+        ),
+    )
 
     if not django.apps.apps.ready:
         django.setup()

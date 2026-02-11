@@ -14,9 +14,9 @@ from celery.events import EventReceiver
 from kombu.exceptions import OperationalError
 
 from celery_cnc.config import set_settings
-from celery_cnc.db.models import TaskEvent, TaskRelation, WorkerEvent
-from celery_cnc.logging.setup import configure_process_logging
-from celery_cnc.logging.utils import sanitize_component
+from celery_cnc.core.db.models import TaskEvent, TaskRelation, WorkerEvent
+from celery_cnc.core.logging.setup import configure_process_logging
+from celery_cnc.core.logging.utils import sanitize_component
 
 if TYPE_CHECKING:
     from celery_cnc.config import CeleryCnCConfig
@@ -177,7 +177,7 @@ class EventListener(Process):
         worker_event = WorkerEvent(
             hostname=str(hostname),
             event=event_type,
-            timestamp=_event_timestamp(event),
+            timestamp=_event_received_timestamp(event),
             info=info,
             broker_url=self.broker_url,
         )
@@ -205,8 +205,21 @@ def _event_timestamp(event: dict[str, object]) -> datetime:
     if isinstance(raw, int | float):
         return datetime.fromtimestamp(float(raw), tz=UTC)
     if isinstance(raw, datetime):
+        if raw.tzinfo is None:
+            return raw.replace(tzinfo=UTC)
         return raw
     return datetime.now(UTC)
+
+
+def _event_received_timestamp(event: dict[str, object]) -> datetime:
+    raw = event.get("local_received")
+    if isinstance(raw, int | float):
+        return datetime.fromtimestamp(float(raw), tz=UTC)
+    if isinstance(raw, datetime):
+        if raw.tzinfo is None:
+            return raw.replace(tzinfo=UTC)
+        return raw
+    return _event_timestamp(event)
 
 
 def _event_field(event: dict[str, object], *keys: str) -> object | None:

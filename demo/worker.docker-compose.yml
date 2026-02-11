@@ -1,0 +1,35 @@
+services:
+  worker_math:
+    build:
+      context: ..
+      dockerfile: demo/Dockerfile
+    command: ["celery", "-A", "demo.worker_math", "worker", "-n", "math@%h", "-l", "INFO"]
+    environment:
+      BROKER_URL: amqp://guest:guest@broker1_rabbitmq:5672//
+      BACKEND_URL: redis://backend1_redis:6379/0
+      C_FORCE_ROOT: "1"
+
+  worker_text:
+    build:
+      context: ..
+      dockerfile: demo/Dockerfile
+    command: ["celery", "-A", "demo.worker_text", "worker", "-n", "text@%h", "-l", "INFO"]
+    environment:
+      BROKER2_URL: amqp://guest:guest@broker2_rabbitmq:5672//
+      BACKEND2_URL: redis://backend2_redis:6379/0
+      C_FORCE_ROOT: "1"
+
+  worker_sleep:
+    build:
+      context: ..
+      dockerfile: demo/Dockerfile
+    command: ["celery", "-A", "demo.worker_sleep", "worker", "-n", "sleep@%h", "-l", "INFO"]
+    environment:
+      BROKER3_URL: redis://broker3_redis:6379/0
+      BACKEND3_URL: db+postgresql://postgres:postgres@backend3_postgres:5432/postgres
+      C_FORCE_ROOT: "1"
+
+networks:
+  default:
+    name: "celery_cnc_demo"
+    external: true

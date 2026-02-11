@@ -6,10 +6,8 @@ from typing import TYPE_CHECKING, cast
 if TYPE_CHECKING:
     from celery import Celery
 
-from celery_cnc.cnc import beat
-from celery_cnc.core.registry import WorkerRegistry
-from celery_cnc.db.abc import BaseDBController
-from celery_cnc.db.models import (
+from celery_cnc.core.db.adapters.base import BaseDBController
+from celery_cnc.core.db.models import (
     Schedule,
     Task,
     TaskEvent,
@@ -21,6 +19,8 @@ from celery_cnc.db.models import (
     Worker,
     WorkerEvent,
 )
+from celery_cnc.core.engine import beat
+from celery_cnc.core.registry import WorkerRegistry
 
 
 class FakeDB(BaseDBController):

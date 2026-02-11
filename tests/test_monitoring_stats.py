@@ -2,8 +2,9 @@ from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
 
-from celery_cnc.db.abc import BaseDBController
-from celery_cnc.db.models import (
+from celery_cnc.components.metrics import stats
+from celery_cnc.core.db.adapters.base import BaseDBController
+from celery_cnc.core.db.models import (
     Schedule,
     Task,
     TaskEvent,
@@ -15,7 +16,6 @@ from celery_cnc.db.models import (
     Worker,
     WorkerEvent,
 )
-from celery_cnc.monitoring import stats
 
 
 class FakeDB(BaseDBController):

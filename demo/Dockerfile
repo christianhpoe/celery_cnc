@@ -1,0 +1,12 @@
+FROM python:3.13-slim
+
+WORKDIR /app
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
+
+COPY pyproject.toml uv.lock README.md LICENSE /app/
+COPY celery_cnc /app/celery_cnc
+COPY demo /app/demo
+
+RUN pip install --no-cache-dir . "celery[redis]" "psycopg2-binary"

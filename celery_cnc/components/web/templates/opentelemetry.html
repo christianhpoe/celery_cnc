@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+
+{% block content %}
+  <header class="page-section-header">
+    <div>
+      <p class="eyebrow">Tracing</p>
+      <h2>OpenTelemetry</h2>
+      <p>Exporter status and configuration summary.</p>
+    </div>
+  </header>
+
+  <section class="detail-card">
+    <h3>Exporter Status</h3>
+    <p class="detail-runtime">
+      Status:
+      <span
+        class="badge {% if component.status == 'up' %}badge-success{% elif component.status == 'down' %}badge-danger{% elif component.status == 'configured' %}badge-info{% else %}badge-muted{% endif %}"
+      >
+        {{ component.status }}
+      </span>
+    </p>
+    {% if component.pid %}
+      <p class="detail-runtime">Process PID: {{ component.pid }}</p>
+    {% endif %}
+  </section>
+
+  <section class="detail-card">
+    <h3>Configuration</h3>
+    <p class="detail-runtime">Service name: {{ component.config.service_name }}</p>
+    <p class="detail-runtime">Endpoint: {{ component.config.endpoint }}</p>
+  </section>
+{% endblock %}

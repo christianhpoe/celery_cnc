@@ -5,8 +5,9 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from celery_cnc.db.memory import MemoryController
-from celery_cnc.db.models import (
+from celery_cnc.core.db.adapters.memory import MemoryController
+from celery_cnc.core.db.adapters.sqlite import SQLiteController
+from celery_cnc.core.db.models import (
     Schedule,
     TaskEvent,
     TaskFilter,
@@ -14,13 +15,12 @@ from celery_cnc.db.models import (
     TimeRange,
     WorkerEvent,
 )
-from celery_cnc.db.sqlite import SQLiteController
 
 if TYPE_CHECKING:
     from collections.abc import Generator
     from pathlib import Path
 
-    from celery_cnc.db.abc import BaseDBController
+    from celery_cnc.core.db.adapters.base import BaseDBController
 
 
 @pytest.fixture(params=["memory", "sqlite"])

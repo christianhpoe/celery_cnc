@@ -3,7 +3,7 @@ from __future__ import annotations
 from types import SimpleNamespace
 from typing import TYPE_CHECKING, cast
 
-from celery_cnc.cnc import workers
+from celery_cnc.core.engine import workers
 from celery_cnc.core.registry import WorkerRegistry
 
 if TYPE_CHECKING:

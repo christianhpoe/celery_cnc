@@ -13,27 +13,38 @@ from typing import TYPE_CHECKING
 from uvicorn import Config as UvicornConfig
 from uvicorn import Server as UvicornServer
 
+from celery_cnc.components.mcp.server import create_asgi_app
 from celery_cnc.config import set_settings
-from celery_cnc.db.manager import DBManager
-from celery_cnc.logging.setup import configure_process_logging
-from celery_cnc.mcp.server import create_asgi_app
-from celery_cnc.monitoring.otel import OTelExporter
-from celery_cnc.monitoring.prometheus import PrometheusExporter
-from celery_cnc.web import devserver
+from celery_cnc.core.component_status import ComponentStatusStore, build_statuses
+from celery_cnc.core.db.manager import DBManager
+from celery_cnc.core.logging.setup import configure_process_logging
 
 from .event_listener import EventListener
 
 if TYPE_CHECKING:
     from collections.abc import Callable
 
+    from celery_cnc.components.metrics.base import BaseMonitoringExporter
     from celery_cnc.config import CeleryCnCConfig
-    from celery_cnc.db.abc import BaseDBController
-    from celery_cnc.monitoring.abc import BaseMonitoringExporter
+    from celery_cnc.core.db.adapters.base import BaseDBController
 
     from .registry import WorkerRegistry
 
 _MONITOR_INTERVAL = 1.0
 _HEARTBEAT_INTERVAL = 60.0
+
+
+def _metrics_url(config: CeleryCnCConfig) -> str:
+    frontend = config.frontend
+    host = frontend.host if frontend is not None else "127.0.0.1"
+    if host in {"0.0.0.0", "::"}:  # noqa: S104
+        host = "127.0.0.1"
+    if ":" in host and not host.startswith("["):
+        host = f"[{host}]"
+    prometheus = config.prometheus
+    path = "/metrics" if prometheus is None else prometheus.prometheus_path
+    port = 8001 if prometheus is None else prometheus.port
+    return f"http://{host}:{port}{path}"
 
 
 class _WebServerProcess(Process):
@@ -42,7 +53,7 @@ class _WebServerProcess(Process):
         super().__init__(daemon=True)
         self._host = host
         self._port = port
-        self._config = config
+        self._cnc_config = config
         self._stop_event = Event()
 
     def stop(self) -> None:
@@ -51,8 +62,8 @@ class _WebServerProcess(Process):
 
     def run(self) -> None:
         """Run the web UI development server."""
-        set_settings(self._config)
-        configure_process_logging(self._config, component="web")
+        set_settings(self._cnc_config)
+        configure_process_logging(self._cnc_config, component="web")
         logger = logging.getLogger(__name__)
         logger.info("Web server starting on %s:%s", self._host, self._port)
 
@@ -62,6 +73,8 @@ class _WebServerProcess(Process):
                 time.sleep(_HEARTBEAT_INTERVAL)
 
         threading.Thread(target=_heartbeat, daemon=True).start()
+        from celery_cnc.components.web import devserver  # noqa: PLC0415
+
         devserver.serve(self._host, self._port, shutdown_event=self._stop_event)
         logger.info("Web server stopped on %s:%s", self._host, self._port)
 
@@ -72,12 +85,14 @@ class _ExporterProcess(Process):
         exporter_factory: Callable[[], BaseMonitoringExporter],
         config: CeleryCnCConfig,
         component: str,
+        metrics_url: str | None = None,
     ) -> None:
         """Create a process to host a monitoring exporter."""
         super().__init__(daemon=True)
         self._exporter_factory = exporter_factory
-        self._config = config
+        self._cnc_config = config
         self._component = component
+        self._metrics_url = metrics_url
         self._stop_event = Event()
 
     def stop(self) -> None:
@@ -86,12 +101,14 @@ class _ExporterProcess(Process):
 
     def run(self) -> None:
         """Run the exporter and keep it alive until stopped."""
-        set_settings(self._config)
-        configure_process_logging(self._config, component=self._component)
+        set_settings(self._cnc_config)
+        configure_process_logging(self._cnc_config, component=self._component)
         logger = logging.getLogger(__name__)
         logger.info("Exporter process starting (%s).", self._component)
         exporter = self._exporter_factory()
         exporter.serve()
+        if self._metrics_url:
+            print(f"Prometheus metrics available at {self._metrics_url}")  # noqa: T201
         last_heartbeat = time.monotonic()
         while not self._stop_event.is_set():
             time.sleep(1.0)
@@ -123,15 +140,15 @@ class _McpServerProcess(Process):
         logger = logging.getLogger(__name__)
         logger.info("MCP server starting on %s:%s", self._host, self._port)
         app = create_asgi_app()
-
-        config = UvicornConfig(
+        server_config = UvicornConfig(
             app=app,
             host=self._host,
             port=self._port,
-            log_level=self._config.log_level.lower(),
+            log_level=self._config.logging.log_level.lower(),
             access_log=False,
+            ws="websockets-sansio",
         )
-        server = UvicornServer(config=config)
+        server = UvicornServer(config=server_config)
 
         def _watch_stop() -> None:
             self._stop_event.wait()
@@ -160,6 +177,7 @@ class ProcessManager:
         self._logger = logging.getLogger(__name__)
         self._process_factories: dict[str, Callable[[], Process]] = {}
         self._processes: dict[str, Process] = {}
+        self._status_store = ComponentStatusStore.from_config(config)
 
     def start(self) -> None:
         """Start all configured subprocesses."""
@@ -169,6 +187,7 @@ class ProcessManager:
             self._logger.info("Starting process %s.", name)
             self._processes[name] = factory()
             self._processes[name].start()
+        self._write_statuses()
 
     def run(self) -> None:
         """Run the supervisor loop until stopped."""
@@ -180,6 +199,7 @@ class ProcessManager:
         try:
             while not self._stop_event.is_set():
                 self._monitor()
+                self._write_statuses()
                 now = time.monotonic()
                 if now - last_heartbeat >= _HEARTBEAT_INTERVAL:
                     self._logger.info("ProcessManager heartbeat (%d processes).", len(self._processes))
@@ -204,6 +224,7 @@ class ProcessManager:
             if process.is_alive():
                 self._logger.warning("Process %s still running; terminating.", process.name)
                 process.terminate()
+        self._write_statuses()
 
     def _build_processes(self) -> None:
         self._process_factories.clear()
@@ -213,35 +234,55 @@ class ProcessManager:
             self._controller_factory,
             self._config,
         )
-        for broker_url in self._registry.get_brokers():
+        backend_map: dict[str, str] = {}
+        broker_groups = self._registry.get_brokers()
+        for broker_url, group in broker_groups.items():
+            backends = {str(app.conf.result_backend) if app.conf.result_backend else "" for app in group.apps}
+            backend_map[broker_url] = next(iter(backends)) if len(backends) == 1 else "multiple"
+        for broker_url in broker_groups:
             name = f"event_listener:{broker_url}"
             self._process_factories[name] = functools.partial(EventListener, broker_url, self._queue, self._config)
-        if self._config.prometheus:
+        if self._config.prometheus is not None:
+            from celery_cnc.components.metrics.prometheus import PrometheusExporter  # noqa: PLC0415
+
+            metrics_url = _metrics_url(self._config)
             self._process_factories["prometheus"] = functools.partial(
                 _ExporterProcess,
-                lambda: PrometheusExporter(port=self._config.prometheus_port),
+                functools.partial(
+                    PrometheusExporter,
+                    port=self._config.prometheus.port,
+                    broker_backend_map=backend_map,
+                    flower_compatibility=self._config.prometheus.flower_compatibility,
+                ),
                 self._config,
                 "prometheus",
+                metrics_url,
             )
-        if self._config.opentelemetry:
+        if self._config.open_telemetry is not None:
+            from celery_cnc.components.metrics.opentelemetry import OTelExporter  # noqa: PLC0415
+
             self._process_factories["otel"] = functools.partial(
                 _ExporterProcess,
-                OTelExporter,
+                functools.partial(
+                    OTelExporter,
+                    service_name=self._config.open_telemetry.service_name,
+                    endpoint=self._config.open_telemetry.endpoint,
+                ),
                 self._config,
                 "otel",
             )
-        if self._config.web_enabled:
+        if self._config.frontend is not None:
             self._process_factories["web"] = functools.partial(
                 _WebServerProcess,
-                self._config.web_host,
-                self._config.web_port,
+                self._config.frontend.host,
+                self._config.frontend.port,
                 self._config,
             )
-        if self._config.mcp_enabled:
+        if self._config.mcp is not None:
             self._process_factories["mcp"] = functools.partial(
                 _McpServerProcess,
-                self._config.mcp_host,
-                self._config.mcp_port,
+                self._config.mcp.host,
+                self._config.mcp.port,
                 self._config,
             )
 
@@ -259,3 +300,7 @@ class ProcessManager:
             self._processes[name] = replacement
             replacement.start()
             self._logger.info("Process %s restarted.", name)
+
+    def _write_statuses(self) -> None:
+        statuses = build_statuses(self._processes)
+        self._status_store.write(statuses)

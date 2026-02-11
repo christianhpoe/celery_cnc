@@ -8,7 +8,7 @@ if TYPE_CHECKING:
 
     from celery import Celery
 
-from celery_cnc.cnc import health
+from celery_cnc.core.engine import health
 from celery_cnc.core.registry import WorkerRegistry
 
 
