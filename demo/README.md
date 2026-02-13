@@ -1,4 +1,4 @@
-# Celery CnC Demo Workers
+# Celery Root Demo Workers
 
 This demo spins up three Celery workers with distinct task sets plus RabbitMQ, Redis, and Postgres via Docker Compose.
 
@@ -39,7 +39,7 @@ cd demo
 docker compose -f otel.docker-compose.yml up
 ```
 
-Then start Celery CnC with `OpenTelemetryConfig(endpoint="http://localhost:4317")`.
+Then start Celery Root with `OpenTelemetryConfig(endpoint="http://localhost:4317")`.
 The collector exposes a Prometheus scrape endpoint at `http://localhost:9464/metrics`
 so you can view the OTLP-exported metrics in a browser.
 

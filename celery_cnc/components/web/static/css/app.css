@@ -298,11 +298,24 @@ body {
 }
 
 .sidebar-brand {
-  font-size: 1.25rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 1.2rem;
   letter-spacing: 0.04rem;
   text-transform: none;
   color: var(--text-primary);
-  font-weight: 600;
+  font-weight: 700;
+}
+
+.sidebar-logo {
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+  border-radius: 6px;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.12);
+  background: radial-gradient(circle at 20% 20%, rgba(255, 255, 255, 0.18), transparent 48%),
+    radial-gradient(circle at 80% 80%, rgba(0, 0, 0, 0.08), transparent 42%);
 }
 
 .sidebar-nav {

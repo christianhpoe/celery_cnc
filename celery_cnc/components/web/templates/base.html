@@ -4,7 +4,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>{{ title|default:"Celery CnC" }}</title>
+    <title>{{ title|default:"Celery Root" }}</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -12,6 +12,9 @@
       rel="stylesheet"
     />
     <link rel="icon" href="{% static 'favicon.svg' %}" type="image/svg+xml" />
+    <link rel="icon" href="{% static 'favicon-32.png' %}" sizes="32x32" type="image/png" />
+    <link rel="icon" href="{% static 'favicon-16.png' %}" sizes="16x16" type="image/png" />
+    <link rel="apple-touch-icon" href="{% static 'favicon-180.png' %}" sizes="180x180" />
     <link rel="stylesheet" href="{% static 'css/app.css' %}" />
     {% block head_extras %}{% endblock %}
   </head>
@@ -19,7 +22,10 @@
   <body class="page-{{ request.resolver_match.url_name|default:'default' }}">
     <div class="layout" id="layout-root">
       <aside class="sidebar" id="primary-sidebar">
-        <div class="sidebar-brand">Celery CNC</div>
+        <div class="sidebar-brand">
+          <img src="{% static 'logo-sidebar.png' %}" alt="Celery Root logo" class="sidebar-logo" />
+          <span>Celery Root</span>
+        </div>
         {% with current_url=request.resolver_match.url_name %}
           <nav class="sidebar-nav">
             <a
@@ -67,8 +73,8 @@
       <div class="main-area">
         <header class="top-bar">
           <div>
-            <p class="eyebrow">Command & Control</p>
-            <h1 class="page-title">{{ title|default:"Celery CnC" }}</h1>
+            <p class="eyebrow">Command &amp; Control</p>
+            <h1 class="page-title">{{ title|default:"Celery Root" }}</h1>
           </div>
           <div class="top-actions">
             <button class="btn ghost sidebar-toggle" type="button" aria-label="Toggle navigation">
@@ -79,7 +85,7 @@
               href="https://github.com/christianhpoe/celery_cnc"
               target="_blank"
               rel="noreferrer noopener"
-              aria-label="Open celery_cnc on GitHub"
+              aria-label="Open Celery Root on GitHub"
             >
               <svg class="github-icon" viewBox="0 0 24 24" role="img" aria-hidden="true">
                 <path

@@ -1,1 +1,1 @@
-"""Django web application integration for Celery CnC."""
+"""Django web application integration for Celery Root."""

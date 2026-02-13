@@ -1,4 +1,4 @@
-"""CLI entrypoints for Celery CnC."""
+"""CLI entrypoints for Celery Root."""
 
 from __future__ import annotations
 
@@ -96,7 +96,7 @@ def _get_app_from_context(ctx: click.Context) -> Celery | None:
     return app if isinstance(app, Celery) else None
 
 
-@click.command(help="Run Celery CnC as a standalone service.")
+@click.command(help="Run Celery Root as a standalone service.")
 @click.option(
     "-A",
     "--app",
@@ -125,7 +125,7 @@ def main(
     *,
     debug: bool | None,
 ) -> None:
-    """Start the Celery CnC process manager."""
+    """Start the Celery Root process manager."""
     paths = _resolve_worker_paths((*apps, *workers))
     config = _apply_frontend_overrides(get_settings(), host, port, debug=debug)
     config = _apply_worker_paths(config, paths)
@@ -133,7 +133,7 @@ def main(
     _run_cnc(loaded_apps, config)
 
 
-@click.command(help="Run Celery CnC using the current Celery app.")
+@click.command(help="Run Celery Root using the current Celery app.")
 @click.option("--host", default=None, help="Bind the web UI to this host.")
 @click.option(
     "--port",

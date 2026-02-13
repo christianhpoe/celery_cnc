@@ -1,4 +1,4 @@
-"""Django settings for the Celery CnC web app."""
+"""Django settings for the Celery Root web app."""
 
 from __future__ import annotations
 

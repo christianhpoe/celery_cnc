@@ -1,4 +1,4 @@
-"""Prometheus exporter for Celery CnC metrics."""
+"""Prometheus exporter for Celery Root metrics."""
 
 from __future__ import annotations
 

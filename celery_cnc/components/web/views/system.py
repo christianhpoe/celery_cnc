@@ -1,4 +1,4 @@
-"""System endpoints for the Celery CnC web app."""
+"""System endpoints for the Celery Root web app."""
 
 from __future__ import annotations
 

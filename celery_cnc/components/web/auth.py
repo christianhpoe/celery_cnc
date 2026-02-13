@@ -1,4 +1,4 @@
-"""Authentication helpers for the Celery CnC web app."""
+"""Authentication helpers for the Celery Root web app."""
 
 from __future__ import annotations
 
@@ -32,7 +32,7 @@ from django.urls import reverse
 _SESSION_AUTH_KEY = "celery_cnc_auth"
 _SESSION_STATE_KEY = "celery_cnc_oauth_state"
 _SESSION_NEXT_KEY = "celery_cnc_oauth_next"
-_BASIC_REALM = 'Basic realm="Celery CnC"'
+_BASIC_REALM = 'Basic realm="Celery Root"'
 _DEFAULT_GITLAB_DOMAIN = "https://gitlab.com"
 _DEFAULT_GITLAB_MIN_LEVEL = 20
 _EXEMPT_PATHS = frozenset({"/healthcheck", "/metrics", "/login", "/logout", "/favicon.ico"})

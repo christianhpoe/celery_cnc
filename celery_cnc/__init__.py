@@ -1,4 +1,4 @@
-"""Public package entrypoints for Celery CnC."""
+"""Public package entrypoints for Celery Root."""
 
 from __future__ import annotations
 

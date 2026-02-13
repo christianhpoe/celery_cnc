@@ -1,4 +1,4 @@
-"""Development web server for the Celery CnC UI."""
+"""Development web server for the Celery Root UI."""
 
 from __future__ import annotations
 
@@ -82,7 +82,7 @@ def main() -> None:
     config = get_settings()
     configure_process_logging(config, component="web")
     frontend = config.frontend
-    parser = argparse.ArgumentParser(description="Run the Celery CnC dev web server.")
+    parser = argparse.ArgumentParser(description="Run the Celery Root dev web server.")
     parser.add_argument("--host", default=(frontend.host if frontend else "127.0.0.1"))
     parser.add_argument("--port", type=int, default=(frontend.port if frontend else 8000))
     args = parser.parse_args()

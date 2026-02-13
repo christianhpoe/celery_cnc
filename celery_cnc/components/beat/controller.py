@@ -1,4 +1,4 @@
-"""Beat schedule synchronization for Celery CnC."""
+"""Beat schedule synchronization for Celery Root."""
 
 from __future__ import annotations
 

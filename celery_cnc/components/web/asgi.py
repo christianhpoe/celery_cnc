@@ -1,4 +1,4 @@
-"""ASGI config for Celery CnC Django app."""
+"""ASGI config for the Celery Root Django app."""
 
 from __future__ import annotations
 

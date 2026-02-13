@@ -1,4 +1,4 @@
-"""Configuration settings for Celery CnC."""
+"""Configuration settings for Celery Root."""
 
 from __future__ import annotations
 
@@ -160,7 +160,7 @@ class McpConfig(BaseModel):
 
 
 class CeleryCnCConfig(BaseModel):
-    """Central configuration for Celery CnC."""
+    """Central configuration for Celery Root."""
 
     model_config = ConfigDict(validate_assignment=True, extra="ignore")
 

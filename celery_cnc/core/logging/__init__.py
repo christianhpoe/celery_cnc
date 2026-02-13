@@ -1,4 +1,4 @@
-"""Logging helpers for Celery CnC."""
+"""Logging helpers for Celery Root."""
 
 from .adapters.base import BaseLogController
 

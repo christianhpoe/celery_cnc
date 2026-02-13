@@ -1,4 +1,4 @@
-"""FastMCP server for Celery CnC."""
+"""FastMCP server for Celery Root."""
 
 from __future__ import annotations
 
@@ -174,7 +174,7 @@ def _fetch_task_stats() -> list[dict[str, object]]:
 
 
 def create_mcp_server() -> FastMCP:
-    """Create the FastMCP server with Celery CnC tools."""
+    """Create the FastMCP server with Celery Root tools."""
     config = get_settings()
     mcp_config = config.mcp
     if mcp_config is None:
@@ -183,7 +183,7 @@ def create_mcp_server() -> FastMCP:
     if not mcp_config.auth_key:
         msg = "CELERY_CNC_MCP_AUTH_KEY must be set when MCP is enabled."
         raise RuntimeError(msg)
-    mcp = FastMCP(name="Celery CnC MCP", auth=_build_auth(mcp_config))
+    mcp = FastMCP(name="Celery Root MCP", auth=_build_auth(mcp_config))
 
     @mcp.tool(name="fetch_schema")
     def fetch_schema() -> dict[str, object]:

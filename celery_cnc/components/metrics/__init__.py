@@ -1,4 +1,4 @@
-"""Monitoring exporters for Celery CnC."""
+"""Monitoring exporters for Celery Root."""
 
 from .base import BaseMonitoringExporter
 

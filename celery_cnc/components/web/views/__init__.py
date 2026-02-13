@@ -1,1 +1,1 @@
-"""Django views for Celery CnC."""
+"""Django views for Celery Root."""

@@ -1,4 +1,4 @@
-"""Component interfaces for Celery CnC."""
+"""Component interfaces for Celery Root."""
 
 from __future__ import annotations
 

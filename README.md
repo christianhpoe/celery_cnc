@@ -1,8 +1,9 @@
-# celery_cnc
+# Celery Root
 
-Celery Command & Control (CnC) is a multi-worker monitoring, management, and visualization tool for Celery.
+Celery Root is a command & control plane for Celery (formerly Celery CnC).
 It ships with a Django-based UI, a lightweight event listener/collector, and helper utilities for inspecting
-queues, tasks, workers, and beat schedules.
+queues, tasks, workers, and beat schedules. The distribution and Python package names are still
+`celery_cnc` for compatibility; only the product name and visuals have changed.
 
 ## Features
 
@@ -31,7 +32,7 @@ make demo-worker-math
 make demo-worker-text
 ```
 
-Launch the CnC supervisor + web UI:
+Launch the Celery Root supervisor + web UI:
 
 ```bash
 make demo-cnc
@@ -56,7 +57,7 @@ uv run python celery_cnc/components/web/manage.py migrate
 uv run python -m celery_cnc.components.web.devserver --host 127.0.0.1 --port 8000
 ```
 
-The UI reads task/worker data from the CnC SQLite store (see configuration below).
+The UI reads task/worker data from the Celery Root SQLite store (see configuration below).
 
 ## CLI usage
 
@@ -129,14 +130,14 @@ cnc.run()
 
 ## MCP server (AI tools)
 
-Celery CnC ships with an optional MCP server that exposes read-only tools over HTTP.
-It is designed to let MCP clients (Codex CLI, Claude Code, etc.) inspect the CnC
+Celery Root ships with an optional MCP server that exposes read-only tools over HTTP.
+It is designed to let MCP clients (Codex CLI, Claude Code, etc.) inspect the Celery Root
 SQLite store safely without write access.
 
 How it works:
 
 - The MCP server runs as a separate process when `CELERY_CNC_MCP_ENABLED=1`.
-- Requests are served from the CnC SQLite store using a read-only SQLAlchemy engine.
+- Requests are served from the Celery Root SQLite store using a read-only SQLAlchemy engine.
 - Tools include schema discovery, limited SQL querying (SELECT/WITH only), and a
   dashboard stats payload that matches the web UI.
 - Authentication is enforced with a static bearer token (`CELERY_CNC_MCP_AUTH_KEY`).

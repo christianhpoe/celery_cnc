@@ -1,14 +1,3 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
-  <rect width="64" height="64" fill="#000000" />
-  <text
-    x="50%"
-    y="50%"
-    fill="#ffffff"
-    font-family="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"
-    font-size="28"
-    text-anchor="middle"
-    dominant-baseline="central"
-  >
-    CNC
-  </text>
+  <image href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAACqaXHeAAAE9klEQVR4nO2aXahmUxjHf3vNO+eMOQwKkRhEuTBlxMVIwpR8XCEXyseF5oJiSskFFyKRq1FKQsaFiVISCaN8JcwFEQcZM2EGMzHHt/PhvFuP/k89rfY5c9K737P3Oftfq7X2u/daez/Per7XCx06dOjQoUOHDouDFUBimaKYY7xsdt5wB3DpfyPosUxQqD8DKIFdwOrs3pJEIX0fA44AtgB9MeEK4GhgZZCOJYtTgJ3APjFgFtgN7FiqBrFQfxhwNnCadr0MDCjFBJOMDcAILUVPzcWdcH0sMAmMA3+I+H5gwn5JxvdhjqtD0nWvbSqSwtg+/lPt9mwgvszGL2bzajWMaQBr+AeOAg8Cm4DDgXUi6hzgSOAf4NXAAJ9bqrf7iAE27yTgTN0/FTgK2Azc20RvUajt1gd/CUwAtwHvAl8Aa4Hjgb/FANf9UsQb0Xu0KZcDP4sZt0s9dunZT/TORhnMnvpbgZlAmLXfg5Ezf3+nrv25vhhg48uAC8Pc37K1poEbs3c2ZvfHgLcDca7ndj2l/iXN2RuMnxP/hlTll4wp/ty0rp9pYg6R1F8vAlykY3MCLPS9KeyoE3oB8Ej4PRpHZ9S+EDqnpknAGhHxfvjoyABnyriCIXeFRujnwHoRXuUhnEkvA2dJlRpjCJM+Zl3Q1ajfsfnvVwPPhefvA+6eY/f72e/Wn5zFGouOpH6jApno68uMAda/AtwSGHCDPIXPyxngv30LnJ+9szFIIeR9XMS6MczVYVIMMNE+IFeXB0g+b0bP3w8conc0RvwjVqhdVeG+omq4Gjwpb2Axw/MV9/O2RxI2UA/QG9RC2jVk0B4FzgWOU4pbKJIbDQTZ/b80zwwgIiyJCfuDVPwIfAD8EN7TCoxIbA+V5b8rxAR9ScpEZiseUOg7prnGtFahCNlcFTbLBX4TpGFc8cOW/7lmY1GEtlISYe0r4DqFySYFl0i81+r+aDa3NqQ6F9fuEvR6Wvp+orLEA1IBi/+PUbFkWmqSsjVaiRTGVul5CvhzDivv7nGbnnW0Tuxz4q3M9UQFsTFfqHJ9j8l4tpIJKZTBPg45v0eCeZgbew+e7Po9MdDXaw2SAhZPj6cqCK8qieXRYqkgyddsBXrqr10A8fMxIKbQF2vNVhREk/rtIZZfCANiH0Nn++3ZuhjQG/B6hT54RC5tIWJbVrg7H3scsF7Ez4ZC6kCQqAerQuZ2sFPhKuOWB0FrwvnhQNGrY1EZMEt0qpDvXtztqvu+ntmSgSMNeL1SomrG67Og1/MhJzxKhNuEnVozDToyTAweTsDWBehrlTT4QUk8NNlW4/fWAs/rt4uIyXk8QO4F8lL6R0qOWhUMJX2snfl/eBBfX9U8EvxO3sTXbG0usFU6HA9M5mozCptf0/lgXKt1SGEcq8BV5wZx5ydCIlRr9JfqXFxEWSHEffle5Qde08+NnfVvqU4wo2daVQPM4YQa8e8oz79HO/16SHhcKuwk+Tzg6TbF/vPBrbZVh0/X+CERvFF1wFKlcesf1n8LNrRd9+fCiP4k8TVwglyc7fw1Ohmy0vdQkYb4nkJW3Sq/N8u379DvZhde0O437txvkHCiVisPsXOCXyUZVypusMowwwp6egwXfTFhKpz5v6kYwaTgp/DsUKrBieGjH3Z3lYIkRHzt5wBNQaH+onD0tSwI75Ch2/UOHTp06MDi4V/a/gWbzjuvTQAAAABJRU5ErkJggg==" width="64" height="64" />
 </svg>

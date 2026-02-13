@@ -1,4 +1,4 @@
-"""Process orchestration for Celery CnC."""
+"""Process orchestration for Celery Root."""
 
 from __future__ import annotations
 

@@ -1,4 +1,4 @@
-"""Django management entrypoint for Celery CnC."""
+"""Django management entrypoint for Celery Root."""
 
 from __future__ import annotations
 

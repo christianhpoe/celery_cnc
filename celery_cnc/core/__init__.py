@@ -1,4 +1,4 @@
-"""Core runtime helpers for Celery CnC."""
+"""Core runtime helpers for Celery Root."""
 
 from .registry import WorkerRegistry
 

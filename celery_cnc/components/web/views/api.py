@@ -1,4 +1,4 @@
-"""JSON API views for Celery CnC."""
+"""JSON API views for Celery Root."""
 
 from __future__ import annotations
 

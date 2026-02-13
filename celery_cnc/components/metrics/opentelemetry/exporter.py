@@ -1,4 +1,4 @@
-"""OpenTelemetry exporter for Celery CnC metrics."""
+"""OpenTelemetry exporter for Celery Root metrics."""
 
 from __future__ import annotations
 

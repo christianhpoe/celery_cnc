@@ -1,4 +1,4 @@
-"""Dashboard views and helpers for Celery CnC."""
+"""Dashboard views and helpers for Celery Root."""
 
 from __future__ import annotations
 
