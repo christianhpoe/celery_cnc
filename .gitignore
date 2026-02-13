@@ -26,4 +26,4 @@ logs/
 .vscode/
 .DS_Store
 /demo/data
-/celery_cnc/web/
+/celery_root/web/

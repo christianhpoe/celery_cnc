@@ -53,37 +53,38 @@ def _install_task_sent_signal() -> None:
         return
     _SIGNAL_INSTALLED["value"] = True
 
-    @signals.before_task_publish.connect(weak=False, dispatch_uid="celery_cnc_demo_task_sent")
-    def _publish_task_sent(
-        _sender: str | None = None,
-        headers: dict[str, object] | None = None,
-        **_: object,
-    ) -> None:
-        if headers is None:
-            return
-        stamped_headers = headers.get("stamped_headers")
-        stamps: dict[str, object] | None = None
-        if isinstance(stamped_headers, list | tuple):
-            stamps = {key: headers[key] for key in stamped_headers if isinstance(key, str) and key in headers} or None
-        app = current_app
-        dispatcher_factory = cast("Any", app.events).default_dispatcher
-        with dispatcher_factory() as dispatcher:
-            dispatcher.send(
-                "task-sent",
-                uuid=headers.get("id"),
-                task=headers.get("task"),
-                name=headers.get("task"),
-                root_id=headers.get("root_id"),
-                parent_id=headers.get("parent_id"),
-                group_id=headers.get("group"),
-                chord_id=headers.get("chord"),
-                stamps=stamps,
-                retries=headers.get("retries", 0),
-                eta=headers.get("eta"),
-                expires=headers.get("expires"),
-                args=headers.get("argsrepr"),
-                kwargs=headers.get("kwargsrepr"),
-            )
+
+@signals.before_task_publish.connect(weak=False, dispatch_uid="celery_root_demo_task_sent")
+def _publish_task_sent(
+    _sender: str | None = None,
+    headers: dict[str, object] | None = None,
+    **_: object,
+) -> None:
+    if headers is None:
+        return
+    stamped_headers = headers.get("stamped_headers")
+    stamps: dict[str, object] | None = None
+    if isinstance(stamped_headers, list | tuple):
+        stamps = {key: headers[key] for key in stamped_headers if isinstance(key, str) and key in headers} or None
+    app = current_app
+    dispatcher_factory = cast("Any", app.events).default_dispatcher
+    with dispatcher_factory() as dispatcher:
+        dispatcher.send(
+            "task-sent",
+            uuid=headers.get("id"),
+            task=headers.get("task"),
+            name=headers.get("task"),
+            root_id=headers.get("root_id"),
+            parent_id=headers.get("parent_id"),
+            group_id=headers.get("group"),
+            chord_id=headers.get("chord"),
+            stamps=stamps,
+            retries=headers.get("retries", 0),
+            eta=headers.get("eta"),
+            expires=headers.get("expires"),
+            args=headers.get("argsrepr"),
+            kwargs=headers.get("kwargsrepr"),
+        )
 
 
 def publish_task_relation(
@@ -94,7 +95,7 @@ def publish_task_relation(
     child_id: str,
     relation: str,
 ) -> None:
-    """Publish a relation event for the CnC event listener."""
+    """Publish a relation event for the Root event listener."""
     dispatcher_factory = cast("Any", app.events).default_dispatcher
     with dispatcher_factory() as dispatcher:
         dispatcher.send(

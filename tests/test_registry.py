@@ -7,7 +7,7 @@ if TYPE_CHECKING:
 
     import pytest
 
-from celery_cnc.core.registry import WorkerRegistry
+from celery_root.core.registry import WorkerRegistry
 from tests.fixtures.app_one import app as app_one
 
 

@@ -1,4 +1,4 @@
-"""Demo Celery workers for celery_cnc."""
+"""Demo Celery workers for celery_root."""
 
 from __future__ import annotations
 

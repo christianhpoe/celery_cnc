@@ -8,8 +8,8 @@ if TYPE_CHECKING:
 
     from celery import Celery
 
-from celery_cnc.core.engine import health
-from celery_cnc.core.registry import WorkerRegistry
+from celery_root.core.engine import health
+from celery_root.core.registry import WorkerRegistry
 
 
 class DummyConnection:

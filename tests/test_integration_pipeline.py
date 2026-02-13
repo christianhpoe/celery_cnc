@@ -9,10 +9,10 @@ from pathlib import Path
 
 import pytest
 
-from celery_cnc.config import CeleryCnCConfig, DatabaseConfigSqlite, get_settings
-from celery_cnc.core.db.adapters.sqlite import SQLiteController
-from celery_cnc.core.db.manager import DBManager
-from celery_cnc.core.event_listener import EventListener
+from celery_root.config import CeleryRootConfig, DatabaseConfigSqlite, get_settings
+from celery_root.core.db.adapters.sqlite import SQLiteController
+from celery_root.core.db.manager import DBManager
+from celery_root.core.event_listener import EventListener
 from tests.fixtures.app_one import app as app_one
 from tests.fixtures.app_two import app as app_two
 
@@ -57,7 +57,7 @@ def test_integration_event_pipeline(tmp_path: Path) -> None:
     db_manager: DBManager | None = None
     try:
         queue: multiprocessing.Queue[object] = multiprocessing.Queue()
-        config = CeleryCnCConfig(database=DatabaseConfigSqlite(batch_size=1, flush_interval=0.2))
+        config = CeleryRootConfig(database=DatabaseConfigSqlite(batch_size=1, flush_interval=0.2))
         db_path = tmp_path / "integration.sqlite3"
 
         def factory() -> SQLiteController:

@@ -2,9 +2,9 @@ from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
 
-from celery_cnc.components.metrics import stats
-from celery_cnc.core.db.adapters.base import BaseDBController
-from celery_cnc.core.db.models import (
+from celery_root.components.metrics import stats
+from celery_root.core.db.adapters.base import BaseDBController
+from celery_root.core.db.models import (
     Schedule,
     Task,
     TaskEvent,

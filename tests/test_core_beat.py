@@ -6,8 +6,8 @@ from typing import TYPE_CHECKING
 from celery import Celery
 from celery.schedules import crontab
 
-from celery_cnc.components.beat import BeatController
-from celery_cnc.core.db.models import Schedule
+from celery_root.components.beat import BeatController
+from celery_root.core.db.models import Schedule
 
 if TYPE_CHECKING:
     from pathlib import Path

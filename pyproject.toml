@@ -1,6 +1,6 @@
 
 [project]
-name = "celery_cnc"
+name = "celery_root"
 version = "0.1.0"
 description = "Celery Command & Control"
 readme = "README.md"
@@ -25,10 +25,10 @@ dependencies = [
 ]
 
 [project.scripts]
-celery-cnc = "celery_cnc.cli:main"
+celery_root = "celery_root.cli:main"
 
 [project.entry-points."celery.commands"]
-cnc = "celery_cnc.cli:cnc"
+celery_root = "celery_root.cli:celery_root"
 
 [dependency-groups]
 dev = [
@@ -45,12 +45,12 @@ dev = [
 ]
 
 [tool.hatch.build.targets.wheel]
-packages = ["celery_cnc"]
+packages = ["celery_root"]
 
 [tool.hatch.build.targets.wheel.force-include]
-"celery_cnc/components/web/templates" = "celery_cnc/components/web/templates"
-"celery_cnc/components/web/static" = "celery_cnc/components/web/static"
-"celery_cnc/py.typed" = "celery_cnc/py.typed"
+"celery_root/components/web/templates" = "celery_root/components/web/templates"
+"celery_root/components/web/static" = "celery_root/components/web/static"
+"celery_root/py.typed" = "celery_root/py.typed"
 
 [tool.black]
 line-length = 120
@@ -74,7 +74,7 @@ convention = "google"
 
 [tool.mypy]
 python_version = "3.13"
-files = ["celery_cnc", "tests", "demo"]
+files = ["celery_root", "tests", "demo"]
 plugins = ["pydantic.mypy", "sqlalchemy.ext.mypy.plugin"]
 follow_imports = "silent"
 warn_redundant_casts = true
@@ -82,6 +82,26 @@ warn_unused_ignores = true
 disallow_any_generics = true
 no_implicit_reexport = true
 disallow_untyped_defs = true
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = [
+  "django",
+  "django.*",
+  "celery",
+  "celery.*",
+  "kombu",
+  "kombu.*",
+  "amqp",
+  "amqp.*",
+  "billiard",
+  "billiard.*",
+  "redis",
+  "redis.*",
+  "vine",
+  "vine.*",
+]
+ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 log_cli = "True"

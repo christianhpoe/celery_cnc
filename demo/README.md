@@ -44,14 +44,14 @@ The collector exposes a Prometheus scrape endpoint at `http://localhost:9464/met
 so you can view the OTLP-exported metrics in a browser.
 
 ## Local graph preview (non-Docker)
-If you want to run the CnC web UI + seed demo tasks locally (so you can inspect graphs),
+If you want to run the Root web UI + seed demo tasks locally (so you can inspect graphs),
 use the helper script from the repo root:
 
 ```bash
 python demo/run_graph_demo.py
 ```
 
-This starts the demo CnC stack, seeds tasks after a short delay, and keeps running until
+This starts the demo Root stack, seeds tasks after a short delay, and keeps running until
 you press Ctrl+C.
 
 ## Task highlights

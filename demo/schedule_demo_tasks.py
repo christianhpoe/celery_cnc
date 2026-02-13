@@ -1,4 +1,4 @@
-"""Seed demo tasks for the Celery CnC stack."""
+"""Seed demo tasks for the Celery Root stack."""
 
 from __future__ import annotations
 
@@ -63,7 +63,7 @@ from demo.worker_text import (
 )
 
 PARAGRAPHS: list[str] = [
-    "Celery CnC keeps an eye on your workers and tasks with ease.",
+    "Celery Root keeps an eye on your workers and tasks with ease.",
     "Chains and chords help demonstrate distributed task flows in the demo stack.",
     "Text processing tasks count words, lines, and explore simple analytics.",
 ]

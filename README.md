@@ -1,9 +1,11 @@
 # Celery Root
 
+Docs: https://docs.celeryroot.eu
+
 Celery Root is a command & control plane for Celery (formerly Celery CnC).
 It ships with a Django-based UI, a lightweight event listener/collector, and helper utilities for inspecting
 queues, tasks, workers, and beat schedules. The distribution and Python package names are still
-`celery_cnc` for compatibility; only the product name and visuals have changed.
+`celery_root` for compatibility; only the product name and visuals have changed.
 
 ## Features
 
@@ -35,7 +37,7 @@ make demo-worker-text
 Launch the Celery Root supervisor + web UI:
 
 ```bash
-make demo-cnc
+make demo-root
 ```
 
 Then open `http://127.0.0.1:8000`.
@@ -49,12 +51,12 @@ make demo-tasks
 ## Running the web UI
 
 If you already have Celery workers and a broker running, you can point the UI at your apps via
-`CELERY_CNC_WORKERS` and run the web server:
+`CELERY_ROOT_WORKERS` and run the web server:
 
 ```bash
-export CELERY_CNC_WORKERS="your_app.celery:app,another_app.celery:app"
-uv run python celery_cnc/components/web/manage.py migrate
-uv run python -m celery_cnc.components.web.devserver --host 127.0.0.1 --port 8000
+export CELERY_ROOT_WORKERS="your_app.celery:app,another_app.celery:app"
+uv run python celery_root/components/web/manage.py migrate
+uv run python -m celery_root.components.web.devserver --host 127.0.0.1 --port 8000
 ```
 
 The UI reads task/worker data from the Celery Root SQLite store (see configuration below).
@@ -66,13 +68,13 @@ You can run the supervisor via the CLI, either standalone or as a Celery subcomm
 Standalone:
 
 ```bash
-celery-cnc -A demo.worker_math:app
+celery_root -A demo.worker_math:app
 ```
 
 Via Celery:
 
 ```bash
-celery -A demo.worker_math:app cnc
+celery -A demo.worker_math:app celery_root
 ```
 
 ## Configuration
@@ -82,9 +84,9 @@ Configuration is explicit via Pydantic models:
 ```python
 from pathlib import Path
 
-from celery_cnc import (
+from celery_root import (
     BeatConfig,
-    CeleryCnCConfig,
+    CeleryRootConfig,
     DatabaseConfigSqlite,
     FrontendConfig,
     LoggingConfigFile,
@@ -92,9 +94,9 @@ from celery_cnc import (
     PrometheusConfig,
 )
 
-config = CeleryCnCConfig(
+config = CeleryRootConfig(
     logging=LoggingConfigFile(log_dir=Path("./logs")),
-    database=DatabaseConfigSqlite(db_path=Path("./celery_cnc.db")),
+    database=DatabaseConfigSqlite(db_path=Path("./celery_root.db")),
     beat=BeatConfig(schedule_path=Path("./celerybeat-schedule")),
     prometheus=PrometheusConfig(port=8001, prometheus_path="/metrics"),
     open_telemetry=OpenTelemetryConfig(endpoint="http://localhost:4317"),
@@ -104,12 +106,12 @@ config = CeleryCnCConfig(
 
 Components are enabled when their config is provided (set to `None` to disable).
 
-The web UI still reads worker import paths from `CELERY_CNC_WORKERS` (comma-separated).
+The web UI still reads worker import paths from `CELERY_ROOT_WORKERS` (comma-separated).
 
 If you need to override settings before Django settings load:
 
 ```python
-from celery_cnc.config import set_settings
+from celery_root.config import set_settings
 
 set_settings(config)
 ```
@@ -122,10 +124,10 @@ workers use `BROKER2_URL`/`BACKEND2_URL` and `BROKER3_URL`/`BACKEND3_URL` respec
 For programmatic use, you can start the supervisor from Python:
 
 ```python
-from celery_cnc import CeleryCnC
+from celery_root import CeleryRoot
 
-cnc = CeleryCnC("your_app.celery:app")
-cnc.run()
+root = CeleryRoot("your_app.celery:app")
+root.run()
 ```
 
 ## MCP server (AI tools)
@@ -136,32 +138,32 @@ SQLite store safely without write access.
 
 How it works:
 
-- The MCP server runs as a separate process when `CELERY_CNC_MCP_ENABLED=1`.
+- The MCP server runs as a separate process when `CELERY_ROOT_MCP_ENABLED=1`.
 - Requests are served from the Celery Root SQLite store using a read-only SQLAlchemy engine.
 - Tools include schema discovery, limited SQL querying (SELECT/WITH only), and a
   dashboard stats payload that matches the web UI.
-- Authentication is enforced with a static bearer token (`CELERY_CNC_MCP_AUTH_KEY`).
+- Authentication is enforced with a static bearer token (`CELERY_ROOT_MCP_AUTH_KEY`).
 - The web Settings page renders copy/paste snippets for MCP client configuration
   and CLI commands for Codex + Claude.
 
 Configuration:
 
-- `CELERY_CNC_MCP_ENABLED`: Enable the MCP server (`1`/`true`).
-- `CELERY_CNC_MCP_HOST`: Host interface (default: `127.0.0.1`).
-- `CELERY_CNC_MCP_PORT`: Port (default: `9100`).
-- `CELERY_CNC_MCP_PATH`: Base path (default: `/mcp/`).
-- `CELERY_CNC_MCP_AUTH_KEY`: Required auth token for clients.
-- `CELERY_CNC_MCP_READONLY_DB_URL`: Optional read-only database URL (defaults to
-  SQLite read-only mode using `CELERY_CNC_DB_PATH`). If you provide a regular
-  database URL via `CELERY_CNC_MCP_READONLY_DB_URL`, it is used as-is; ensure
+- `CELERY_ROOT_MCP_ENABLED`: Enable the MCP server (`1`/`true`).
+- `CELERY_ROOT_MCP_HOST`: Host interface (default: `127.0.0.1`).
+- `CELERY_ROOT_MCP_PORT`: Port (default: `9100`).
+- `CELERY_ROOT_MCP_PATH`: Base path (default: `/mcp/`).
+- `CELERY_ROOT_MCP_AUTH_KEY`: Required auth token for clients.
+- `CELERY_ROOT_MCP_READONLY_DB_URL`: Optional read-only database URL (defaults to
+  SQLite read-only mode using `CELERY_ROOT_DB_PATH`). If you provide a regular
+  database URL via `CELERY_ROOT_MCP_READONLY_DB_URL`, it is used as-is; ensure
   the credentials are truly read-only or queries will not be protected by the
   database itself.
 
 Example:
 
 ```bash
-export CELERY_CNC_MCP_ENABLED=1
-export CELERY_CNC_MCP_AUTH_KEY="your-secret-token"
+export CELERY_ROOT_MCP_ENABLED=1
+export CELERY_ROOT_MCP_AUTH_KEY="your-secret-token"
 ```
 
 Start the supervisor (or MCP server) and then open the Settings page to grab the
@@ -190,7 +192,7 @@ uv run mypy
 
 ## Project structure
 
-- `celery_cnc/components/`: optional components (web, metrics, beat).
-- `celery_cnc/core/`: engine + DB + logging internals.
+- `celery_root/components/`: optional components (web, metrics, beat).
+- `celery_root/core/`: engine + DB + logging internals.
 - `demo/`: demo workers and task scripts.
 - `tests/`: unit and integration tests.
