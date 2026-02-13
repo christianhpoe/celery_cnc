@@ -52,7 +52,7 @@ repos:
         args: []
       - id: pytest
         name: pytest
-        entry: uv run pytest -q
+        entry: make test
         language: system
         pass_filenames: false
         always_run: true

@@ -33,3 +33,6 @@ logs/
 .DS_Store
 /demo/data
 /celery_root/web/
+.coverage
+coverage.xml
+/htmlcov/

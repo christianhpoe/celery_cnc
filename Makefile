@@ -40,6 +40,14 @@ dist_clean:
 lint:
 	uv run pre-commit run --all-files
 
+test: test_ci
+	uv run coverage html
+
+test_ci:
+	uv run coverage run --branch -m pytest -q -vv
+	uv run coverage xml
+	uv run coverage report
+
 docker_network:
 	docker network create celery_root_demo || true
 

@@ -71,7 +71,7 @@ celery-root = "celery_root.cli:celery_root"
 
 [dependency-groups]
 dev = [
-  "celery[librabbitmq,redis]",
+  "celery[librabbitmq,redis,sqlalchemy]",
   "sqlalchemy",
   "psycopg2-binary",
   "mypy",
@@ -82,6 +82,7 @@ dev = [
   "celery-types",
   "django-stubs",
   "reuse",
+  "coverage>=7.13.4",
 ]
 
 [tool.hatch.build.targets.wheel]

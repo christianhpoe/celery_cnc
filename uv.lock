@@ -139,6 +139,9 @@ wheels = [
 redis = [
     { name = "kombu", extra = ["redis"] },
 ]
+sqlalchemy = [
+    { name = "kombu", extra = ["sqlalchemy"] },
+]
 tblib = [
     { name = "tblib" },
 ]
@@ -163,8 +166,9 @@ dependencies = [
 
 [package.dev-dependencies]
 dev = [
-    { name = "celery", extra = ["redis"] },
+    { name = "celery", extra = ["redis", "sqlalchemy"] },
     { name = "celery-types" },
+    { name = "coverage" },
     { name = "django-stubs" },
     { name = "mypy" },
     { name = "pre-commit" },
@@ -193,8 +197,9 @@ requires-dist = [
 
 [package.metadata.requires-dev]
 dev = [
-    { name = "celery", extras = ["librabbitmq", "redis"] },
+    { name = "celery", extras = ["librabbitmq", "redis", "sqlalchemy"] },
     { name = "celery-types" },
+    { name = "coverage", specifier = ">=7.13.4" },
     { name = "django-stubs" },
     { name = "mypy" },
     { name = "pre-commit" },
@@ -1067,6 +1072,9 @@ wheels = [
 [package.optional-dependencies]
 redis = [
     { name = "redis" },
+]
+sqlalchemy = [
+    { name = "sqlalchemy" },
 ]
 
 [[package]]
