@@ -31,5 +31,5 @@ services:
 
 networks:
   default:
-    name: "celery_cnc_demo"
+    name: "celery_root_demo"
     external: true

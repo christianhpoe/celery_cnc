@@ -16,7 +16,7 @@ export default defineConfig({
       formats: ["umd"],
       fileName: () => "graph.js",
     },
-    outDir: resolve(__dirname, "..", "..", "celery_cnc", "web", "static", "graph"),
+    outDir: resolve(__dirname, "..", "..", "celery_root", "web", "static", "graph"),
     emptyOutDir: true,
     cssCodeSplit: false,
     rollupOptions: {

@@ -4,8 +4,8 @@ from datetime import UTC, datetime
 from types import SimpleNamespace
 from typing import TYPE_CHECKING, TypedDict, cast
 
-from celery_cnc.core.engine import tasks
-from celery_cnc.core.registry import WorkerRegistry
+from celery_root.core.engine import tasks
+from celery_root.core.registry import WorkerRegistry
 
 if TYPE_CHECKING:
     from celery import Celery

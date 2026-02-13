@@ -35,13 +35,13 @@ lint:
 	uv run pre-commit run --all-files
 
 docker_network:
-	docker network create celery_cnc_demo || true
+	docker network create celery_root_demo || true
 
 demo_stop_infra:
-	docker compose -p celery_cnc_demo -f demo/infra.docker-compose.yml down --volumes --remove-orphans
+	docker compose -p celery_root_demo -f demo/infra.docker-compose.yml down --volumes --remove-orphans
 
 demo_start_infra: docker_network
-	docker compose -p celery_cnc_demo -f demo/infra.docker-compose.yml up -d
+	docker compose -p celery_root_demo -f demo/infra.docker-compose.yml up -d
 
 demo_worker_math: demo_start_infra
 	uv run celery -A demo.worker_math worker -n math@%h -l INFO
@@ -53,7 +53,7 @@ demo_worker_sleep: demo_start_infra
 	BROKER3_URL=$(BROKER3_URL) BACKEND3_URL=$(BACKEND3_URL) uv run celery -A demo.worker_sleep worker -n sleep@%h -l INFO
 
 demo_workers: demo_start_infra
-	docker compose -p celery_cnc_demo -f demo/worker.docker-compose.yml up --build
+	docker compose -p celery_root_demo -f demo/worker.docker-compose.yml up --build
 
 demo_tasks:
 	uv run python demo/schedule_demo_tasks.py
@@ -61,6 +61,6 @@ demo_tasks:
 demo_graph_tasks:
 	uv run python demo/schedule_demo_tasks.py
 
-demo_cnc: clean build
-	uv run python celery_cnc/components/web/manage.py migrate
+demo_root: clean build
+	uv run python celery_root/components/web/manage.py migrate
 	uv run python demo/main.py

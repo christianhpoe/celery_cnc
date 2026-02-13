@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from celery_cnc.components.web.views.tasks import build_task_schemas
+from celery_root.components.web.views.tasks import build_task_schemas
 from tests.fixtures.app_one import app as app_one
 
 

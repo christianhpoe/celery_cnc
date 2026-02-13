@@ -1,4 +1,4 @@
-# Agent guidelines — celery_cnc
+# Agent guidelines — Celery Root
 
 Instructions for AI agents (and humans) working in this repo.
 

@@ -23,7 +23,7 @@ from demo.worker_text import (
 type TaskFactory = Callable[[int], Signature]
 
 _TEXT_SAMPLES: tuple[str, ...] = (
-    "Celery CnC coordinates tasks and workers.",
+    "Celery Root coordinates tasks and workers.",
     "Monitoring queues and results helps keep systems healthy.",
     "Text tasks show how workers can scale across queues.",
     "Math tasks provide some quick compute workloads.",

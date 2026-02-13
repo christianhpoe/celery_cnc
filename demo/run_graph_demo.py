@@ -8,7 +8,7 @@ import sys
 import time
 from pathlib import Path
 
-_CNC_CMD: list[str] = [sys.executable, "-m", "demo.main"]
+_ROOT_CMD: list[str] = [sys.executable, "-m", "demo.main"]
 _SEED_CMD: list[str] = [sys.executable, "-m", "demo.schedule_demo_tasks"]
 _STARTUP_DELAY_SECONDS = 3.0
 _SHUTDOWN_TIMEOUT_SECONDS = 8.0
@@ -37,15 +37,15 @@ def main() -> None:
     """Start the demo server, seed tasks, and keep running until interrupted."""
     root = _repo_root()
     env = os.environ.copy()
-    cnc = subprocess.Popen(_CNC_CMD, cwd=root, env=env, text=True)  # noqa: S603
+    root_proc = subprocess.Popen(_ROOT_CMD, cwd=root, env=env, text=True)  # noqa: S603
     try:
         time.sleep(_STARTUP_DELAY_SECONDS)
         _seed_tasks(root)
-        cnc.wait()
+        root_proc.wait()
     except KeyboardInterrupt:
         pass
     finally:
-        _shutdown(cnc)
+        _shutdown(root_proc)
 
 
 if __name__ == "__main__":

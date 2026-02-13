@@ -13,9 +13,9 @@ from opentelemetry.sdk.metrics.export import (
 )
 from prometheus_client import CollectorRegistry
 
-from celery_cnc.components.metrics.opentelemetry import OTelExporter
-from celery_cnc.components.metrics.prometheus import PrometheusExporter
-from celery_cnc.core.db.models import TaskEvent, TaskStats, WorkerEvent
+from celery_root.components.metrics.opentelemetry import OTelExporter
+from celery_root.components.metrics.prometheus import PrometheusExporter
+from celery_root.core.db.models import TaskEvent, TaskStats, WorkerEvent
 
 
 def _find_metric(data: MetricsData, name: str) -> Metric:
@@ -72,7 +72,7 @@ def test_prometheus_exporter_records_metrics() -> None:
     exporter.update_stats(TaskStats(min_runtime=0.1, max_runtime=1.0, avg_runtime=0.4, p95=0.8, p99=0.95))
 
     total = registry.get_sample_value(
-        "celery_cnc_events_total",
+        "celery_root_events_total",
         labels={
             "task": "demo.add",
             "type": "task-succeeded",
@@ -84,7 +84,7 @@ def test_prometheus_exporter_records_metrics() -> None:
     assert total == 1
 
     runtime_count = registry.get_sample_value(
-        "celery_cnc_task_runtime_seconds_count",
+        "celery_root_task_runtime_seconds_count",
         labels={
             "task": "demo.add",
             "worker": "w1",
@@ -94,7 +94,7 @@ def test_prometheus_exporter_records_metrics() -> None:
     )
     assert runtime_count == 1
     runtime_by_task_count = registry.get_sample_value(
-        "celery_cnc_task_runtime_by_task_seconds_count",
+        "celery_root_task_runtime_by_task_seconds_count",
         labels={
             "task": "demo.add",
             "broker": "unknown",
@@ -104,7 +104,7 @@ def test_prometheus_exporter_records_metrics() -> None:
     assert runtime_by_task_count == 1
 
     online = registry.get_sample_value(
-        "celery_cnc_worker_online",
+        "celery_root_worker_online",
         labels={
             "worker": "w1",
             "broker": "unknown",
@@ -157,7 +157,7 @@ def test_prometheus_exporter_records_queue_latency_and_failures() -> None:
     )
 
     latency_count = registry.get_sample_value(
-        "celery_cnc_task_queue_latency_seconds_count",
+        "celery_root_task_queue_latency_seconds_count",
         labels={
             "task": "demo.add",
             "worker": "w1",
@@ -168,7 +168,7 @@ def test_prometheus_exporter_records_queue_latency_and_failures() -> None:
     assert latency_count == 1
 
     failures = registry.get_sample_value(
-        "celery_cnc_task_failures_total",
+        "celery_root_task_failures_total",
         labels={
             "task": "demo.add",
             "worker": "w1",
@@ -179,7 +179,7 @@ def test_prometheus_exporter_records_queue_latency_and_failures() -> None:
     assert failures == 1
 
     retries = registry.get_sample_value(
-        "celery_cnc_task_retries_total",
+        "celery_root_task_retries_total",
         labels={
             "task": "demo.add",
             "worker": "w1",
@@ -238,7 +238,7 @@ def test_otel_exporter_records_metrics() -> None:
 
     data = _require_metrics_data(reader)
     total = _get_number(
-        _find_metric(data, "celery_cnc_events_total"),
+        _find_metric(data, "celery_root_events_total"),
         {
             "task": "demo.mul",
             "type": "task-failed",
@@ -250,7 +250,7 @@ def test_otel_exporter_records_metrics() -> None:
     assert total == 1
 
     runtime = _get_histogram(
-        _find_metric(data, "celery_cnc_task_runtime_seconds"),
+        _find_metric(data, "celery_root_task_runtime_seconds"),
         {
             "task": "demo.mul",
             "worker": "w2",
@@ -261,7 +261,7 @@ def test_otel_exporter_records_metrics() -> None:
     assert runtime.count == 1
 
     online = _get_number(
-        _find_metric(data, "celery_cnc_worker_online"),
+        _find_metric(data, "celery_root_worker_online"),
         {
             "worker": "w2",
             "broker": "unknown",
@@ -316,7 +316,7 @@ def test_otel_exporter_records_queue_latency_and_failures() -> None:
 
     data = _require_metrics_data(reader)
     latency = _get_histogram(
-        _find_metric(data, "celery_cnc_task_queue_latency_seconds"),
+        _find_metric(data, "celery_root_task_queue_latency_seconds"),
         {
             "task": "demo.add",
             "worker": "w1",
@@ -327,7 +327,7 @@ def test_otel_exporter_records_queue_latency_and_failures() -> None:
     assert latency.count == 1
 
     failures = _get_number(
-        _find_metric(data, "celery_cnc_task_failures_total"),
+        _find_metric(data, "celery_root_task_failures_total"),
         {
             "task": "demo.add",
             "worker": "w1",
@@ -338,7 +338,7 @@ def test_otel_exporter_records_queue_latency_and_failures() -> None:
     assert failures == 1
 
     retries = _get_number(
-        _find_metric(data, "celery_cnc_task_retries_total"),
+        _find_metric(data, "celery_root_task_retries_total"),
         {
             "task": "demo.add",
             "worker": "w1",

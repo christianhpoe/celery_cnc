@@ -6,13 +6,13 @@ Source: https://flower.readthedocs.io/en/latest/config.html
 
 Legend: [x] supported, [~] partial, [ ] missing
 
-| Flower option | Meaning (short) | CnC status | Current mapping / notes |
+| Flower option | Meaning (short) | Root status | Current mapping / notes |
 | --- | --- | --- | --- |
-| address | bind address | [~] | `FrontendConfig.host` in `celery_cnc/config.py` (defaults differ: Flower empty string vs CnC 127.0.0.1) |
-| port | bind port | [~] | `FrontendConfig.port` in `celery_cnc/config.py` (defaults differ: Flower 5555 vs CnC 8000) |
+| address | bind address | [~] | `FrontendConfig.host` in `celery_root/config.py` (defaults differ: Flower empty string vs Root 127.0.0.1) |
+| port | bind port | [~] | `FrontendConfig.port` in `celery_root/config.py` (defaults differ: Flower 5555 vs Root 8000) |
 | debug | debug mode | [x] | `FrontendConfig.debug` + CLI `--debug/--no-debug` |
-| auth | allowlist regex | [x] | `FrontendConfig.auth` via `celery_cnc/components/web/auth.py` (supports FLOWER_AUTH) |
-| basic_auth | basic auth users | [x] | `FrontendConfig.basic_auth` via `celery_cnc/components/web/auth.py` (supports FLOWER_BASIC_AUTH) |
+| auth | allowlist regex | [x] | `FrontendConfig.auth` via `celery_root/components/web/auth.py` (supports FLOWER_AUTH) |
+| basic_auth | basic auth users | [x] | `FrontendConfig.basic_auth` via `celery_root/components/web/auth.py` (supports FLOWER_BASIC_AUTH) |
 | auth_provider | oauth provider | [x] | `FrontendConfig.auth_provider` (supports FLOWER_AUTH_PROVIDER) |
 | oauth2_key | oauth client id | [x] | `FrontendConfig.oauth2_key` (supports FLOWER_OAUTH2_KEY) |
 | oauth2_secret | oauth client secret | [x] | `FrontendConfig.oauth2_secret` (supports FLOWER_OAUTH2_SECRET) |
@@ -25,11 +25,11 @@ Legend: [x] supported, [~] partial, [ ] missing
 | keyfile | TLS key | [ ] | No TLS support in dev server/uvicorn |
 | ca_certs | TLS CA bundle | [ ] | No TLS support in dev server/uvicorn |
 | broker_api | RabbitMQ management API | [ ] | No broker management API integration |
-| enable_events | periodic enable_events | [~] | Always enabled in `celery_cnc/core/event_listener.py`, not configurable |
-| inspect_timeout | inspect timeout (ms) | [ ] | Fixed at 1.0s in `celery_cnc/core/engine/brokers/base.py` |
+| enable_events | periodic enable_events | [~] | Always enabled in `celery_root/core/event_listener.py`, not configurable |
+| inspect_timeout | inspect timeout (ms) | [ ] | Fixed at 1.0s in `celery_root/core/engine/brokers/base.py` |
 | auto_refresh | auto-refresh workers | [ ] | JS polling exists but no config flag or env mapping |
 | natural_time | relative timestamps | [ ] | UI uses absolute timestamps only |
-| tasks_columns | /tasks columns | [ ] | Columns fixed in `celery_cnc/components/web/templates/tasks/list.html` |
+| tasks_columns | /tasks columns | [ ] | Columns fixed in `celery_root/components/web/templates/tasks/list.html` |
 | format_task | custom task formatter | [ ] | No hook for redaction/formatting |
 | persistent | persist state | [~] | Always persists to SQLite; no toggle |
 | db | state db file | [~] | `DatabaseConfigSqlite.db_path` exists, not Flower-compatible flag |
@@ -42,9 +42,9 @@ Legend: [x] supported, [~] partial, [ ] missing
 
 ## Missing compatibility surfaces
 
-- [ ] Load `flowerconfig.py` / `--conf` and map keys into `CeleryCnCConfig`.
-- [ ] Read all `FLOWER_*` env vars (not just auth) and map to CnC settings.
-- [ ] CLI flags parity for Flower options (accept `celery flower ...` style flags for CNC entrypoint).
+- [ ] Load `flowerconfig.py` / `--conf` and map keys into `CeleryRootConfig`.
+- [ ] Read all `FLOWER_*` env vars (not just auth) and map to Root settings.
+- [ ] CLI flags parity for Flower options (accept `celery flower ...` style flags for the Celery Root entrypoint).
 
 ## Feature parity tasks (top priority)
 
