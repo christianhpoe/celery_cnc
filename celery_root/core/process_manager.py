@@ -14,6 +14,7 @@ import threading
 import time
 from contextlib import suppress
 from multiprocessing import Event, Process, Queue
+from pathlib import Path
 from queue import Empty
 from typing import TYPE_CHECKING
 
@@ -39,6 +40,8 @@ if TYPE_CHECKING:
 
 _MONITOR_INTERVAL = 1.0
 _HEARTBEAT_INTERVAL = 60.0
+_DB_READY_TIMEOUT = 10.0
+_DB_READY_POLL = 0.05
 
 
 def _metrics_url(config: CeleryRootConfig) -> str:
@@ -221,7 +224,16 @@ class ProcessManager:
         """Start all configured subprocesses."""
         self._build_processes()
         self._logger.info("ProcessManager launching %d subprocesses.", len(self._process_factories))
+        db_factory = self._process_factories.get("db_manager")
+        if db_factory is not None:
+            self._logger.info("Starting process db_manager.")
+            db_process = db_factory()
+            self._processes["db_manager"] = db_process
+            db_process.start()
+            self._wait_for_db_socket(db_process)
         for name, factory in self._process_factories.items():
+            if name == "db_manager":
+                continue
             self._logger.info("Starting process %s.", name)
             self._processes[name] = factory()
             self._processes[name].start()
@@ -358,3 +370,20 @@ class ProcessManager:
     def _write_statuses(self) -> None:
         statuses = build_statuses(self._processes)
         self._status_store.write(statuses)
+
+    def _wait_for_db_socket(self, process: Process) -> None:
+        address = self._config.database.rpc_address()
+        socket_path = Path(address)
+        deadline = time.monotonic() + _DB_READY_TIMEOUT
+        while time.monotonic() < deadline:
+            if socket_path.exists():
+                return
+            if not process.is_alive():
+                self._logger.warning("DBManager stopped before socket was ready.")
+                return
+            time.sleep(_DB_READY_POLL)
+        self._logger.warning(
+            "DBManager socket did not appear within %.1fs (%s).",
+            _DB_READY_TIMEOUT,
+            socket_path,
+        )
