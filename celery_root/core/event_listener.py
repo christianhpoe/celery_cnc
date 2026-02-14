@@ -25,6 +25,7 @@ from celery_root.core.db.models import TaskEvent, TaskRelation, WorkerEvent
 from celery_root.core.db.rpc_client import DbRpcClient, RpcCallError
 from celery_root.core.logging.setup import configure_process_logging
 from celery_root.core.logging.utils import sanitize_component
+from celery_root.core.registry import WorkerRegistry
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
@@ -47,6 +48,137 @@ _TASK_STATE_MAP = {
 _ENABLE_EVENTS_INTERVAL = 30.0
 _HEARTBEAT_INTERVAL = 60.0
 _CAPTURE_TIMEOUT = 1.0
+_SERIALIZER_KEYS = ("event_serializer", "task_serializer", "result_serializer")
+_BROKER_KEYS = (
+    "broker_use_ssl",
+    "broker_transport_options",
+    "broker_connection_retry_on_startup",
+    "broker_connection_max_retries",
+    "broker_connection_timeout",
+    "broker_heartbeat",
+    "broker_heartbeat_checkrate",
+    "broker_pool_limit",
+    "broker_failover_strategy",
+)
+
+
+def _load_worker_apps(
+    config: CeleryRootConfig,
+    broker_url: str,
+    logger: logging.Logger,
+) -> tuple[Celery, ...]:
+    if not config.worker_import_paths:
+        return ()
+    try:
+        registry = WorkerRegistry(config.worker_import_paths)
+    except (ImportError, TypeError, ValueError) as exc:
+        logger.warning("Failed to load worker apps for config sync: %s", exc)
+        return ()
+    group = registry.get_brokers().get(broker_url)
+    if group is None:
+        logger.warning("No worker apps found for broker %s; using defaults.", broker_url)
+        return ()
+    return tuple(group.apps)
+
+
+def _describe_app(app: Celery) -> str:
+    raw_main = getattr(app, "main", None)
+    if raw_main:
+        return str(raw_main)
+    conf_main = app.conf.get("main")
+    if conf_main:
+        return str(conf_main)
+    return repr(app)
+
+
+def _prime_app(app: Celery, logger: logging.Logger) -> None:
+    try:
+        app.loader.import_default_modules()
+    except (ImportError, ModuleNotFoundError) as exc:  # pragma: no cover - defensive
+        logger.warning("EventListener failed to import default modules for %s: %s", _describe_app(app), exc)
+
+
+def _select_event_app(
+    config: CeleryRootConfig,
+    broker_url: str,
+    logger: logging.Logger,
+) -> tuple[Celery, tuple[Celery, ...]]:
+    apps = _load_worker_apps(config, broker_url, logger)
+    if not apps:
+        app = Celery(broker=broker_url)
+        _prime_app(app, logger)
+        return app, ()
+    for app in apps:
+        _prime_app(app, logger)
+    primary = apps[0]
+    if broker_url and str(primary.conf.broker_url or "") != broker_url:
+        logger.warning(
+            "EventListener overriding worker app broker_url (%s) with %s.",
+            primary.conf.broker_url,
+            broker_url,
+        )
+        primary.conf.broker_url = broker_url
+    return primary, apps
+
+
+def _collect_accept_content(apps: Sequence[Celery]) -> tuple[str, ...]:
+    allowed: set[str] = set()
+    for app in apps:
+        raw_accept = app.conf.get("accept_content")
+        if raw_accept:
+            for item in raw_accept:
+                allowed.add(str(item))
+        for key in _SERIALIZER_KEYS:
+            serializer = app.conf.get(key)
+            if serializer:
+                allowed.add(str(serializer))
+    return tuple(sorted(allowed))
+
+
+def _resolve_shared_setting(apps: Sequence[Celery], key: str) -> tuple[object | None, bool]:
+    values: list[object] = []
+    for app in apps:
+        value = app.conf.get(key)
+        if value is None:
+            continue
+        values.append(value)
+    if not values:
+        return None, False
+    unique: list[object] = []
+    for value in values:
+        if not any(value == existing for existing in unique):
+            unique.append(value)
+    conflict = len(unique) > 1
+    primary_value = apps[0].conf.get(key)
+    if primary_value is None:
+        primary_value = values[0]
+    return primary_value, conflict
+
+
+def _apply_setting(app: Celery, apps: Sequence[Celery], key: str, logger: logging.Logger) -> None:
+    value, conflict = _resolve_shared_setting(apps, key)
+    if value is None:
+        return
+    app.conf[key] = value
+    if conflict:
+        logger.warning("EventListener using %s=%r from primary worker app; workers disagree.", key, value)
+
+
+def _configure_from_workers(
+    app: Celery,
+    apps: Sequence[Celery],
+    logger: logging.Logger,
+) -> None:
+    if not apps:
+        return
+    accept_content = _collect_accept_content(apps)
+    if accept_content:
+        app.conf.accept_content = list(accept_content)
+        logger.info("EventListener accept_content: %s", ", ".join(accept_content))
+    for key in _SERIALIZER_KEYS:
+        _apply_setting(app, apps, key, logger)
+    for key in _BROKER_KEYS:
+        _apply_setting(app, apps, key, logger)
 
 
 class _ManagedEventReceiver(EventReceiver):
@@ -109,7 +241,13 @@ class EventListener(Process):
             )
         if self._config is not None:
             self._db_client = DbRpcClient.from_config(self._config, client_name=component)
-        app = Celery(broker=self.broker_url)
+        worker_apps: tuple[Celery, ...] = ()
+        if self._config is not None:
+            app, worker_apps = _select_event_app(self._config, self.broker_url, self._logger)
+        else:
+            app = Celery(broker=self.broker_url)
+            _prime_app(app, self._logger)
+        _configure_from_workers(app, worker_apps, self._logger)
         last_heartbeat = time.monotonic()
         while not self._stop_event.is_set():
             try:
@@ -148,7 +286,11 @@ class EventListener(Process):
                 on_iteration=_on_iteration,
             )
             try:
-                receiver.capture(limit=None, timeout=_CAPTURE_TIMEOUT, wakeup=True)
+                while not self._stop_event.is_set():
+                    try:
+                        receiver.capture(limit=None, timeout=_CAPTURE_TIMEOUT, wakeup=True)
+                    except TimeoutError:
+                        continue
             finally:
                 self._logger.info("EventListener disconnected from %s", self.broker_url)
         return last_heartbeat_box[0]
