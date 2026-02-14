@@ -262,6 +262,9 @@ class ProcessManager:
             if process.is_alive():
                 self._logger.warning("Process %s still running; terminating.", process.name)
                 process.terminate()
+                process.join(timeout=5)
+                if process.is_alive():
+                    self._logger.warning("Process %s still running after terminate.", process.name)
         self._write_statuses()
 
     def _build_processes(self) -> None:

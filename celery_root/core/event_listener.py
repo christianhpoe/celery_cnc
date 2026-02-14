@@ -46,6 +46,7 @@ _TASK_STATE_MAP = {
 
 _ENABLE_EVENTS_INTERVAL = 30.0
 _HEARTBEAT_INTERVAL = 60.0
+_CAPTURE_TIMEOUT = 1.0
 
 
 class _ManagedEventReceiver(EventReceiver):
@@ -138,7 +139,7 @@ class EventListener(Process):
                 on_iteration=_on_iteration,
             )
             try:
-                receiver.capture(limit=None, timeout=None, wakeup=True)
+                receiver.capture(limit=None, timeout=_CAPTURE_TIMEOUT, wakeup=True)
             finally:
                 self._logger.info("EventListener disconnected from %s", self.broker_url)
         return last_heartbeat_box[0]

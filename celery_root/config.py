@@ -8,7 +8,9 @@
 
 from __future__ import annotations
 
+import os
 import secrets
+import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 from shutil import rmtree
@@ -16,6 +18,11 @@ from shutil import rmtree
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 MAX_PORT = 65_535
+
+
+def _default_rpc_socket_path() -> Path:
+    token = secrets.token_hex(8)
+    return Path(tempfile.gettempdir()) / f"celery_root_{os.getpid()}_{token}.sock"
 
 
 class LoggingConfigFile(BaseModel):
@@ -53,9 +60,21 @@ class DatabaseConfigBase(BaseModel):
     rpc_host: str = "127.0.0.1"
     rpc_port: int = Field(default=8765, ge=1, le=MAX_PORT)
     rpc_auth_key: str = Field(default_factory=lambda: secrets.token_urlsafe(32))
+    rpc_socket_path: Path = Field(default_factory=_default_rpc_socket_path)
     rpc_max_message_bytes: int = Field(default=4_194_304, gt=0)
     rpc_max_inflight: int = Field(default=64, gt=0)
     rpc_timeout_seconds: float = Field(default=5.0, gt=0)
+
+    @field_validator("rpc_socket_path", mode="after")
+    @classmethod
+    def _expand_rpc_socket_path(cls, value: Path) -> Path:
+        expanded = value.expanduser()
+        expanded.parent.mkdir(parents=True, exist_ok=True)
+        return expanded
+
+    def rpc_address(self) -> str:
+        """Return the address for RPC connections."""
+        return str(self.rpc_socket_path)
 
 
 class DatabaseConfigSqlite(DatabaseConfigBase):

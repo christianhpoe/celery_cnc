@@ -103,7 +103,7 @@ def _authkey_from_config(config: CeleryRootConfig) -> bytes | None:
 
 @dataclass(slots=True)
 class _RpcSettings:
-    address: tuple[str, int]
+    address: str
     authkey: bytes | None
     timeout_seconds: float
     max_message_bytes: int
@@ -212,7 +212,7 @@ class DbRpcClient(BaseDBController):
     def from_config(cls, config: CeleryRootConfig, *, client_name: str | None = None) -> DbRpcClient:
         """Create a client from shared configuration settings."""
         settings = _RpcSettings(
-            address=(config.database.rpc_host, config.database.rpc_port),
+            address=config.database.rpc_address(),
             authkey=_authkey_from_config(config),
             timeout_seconds=config.database.rpc_timeout_seconds,
             max_message_bytes=config.database.rpc_max_message_bytes,

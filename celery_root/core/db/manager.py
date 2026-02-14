@@ -9,6 +9,7 @@
 from __future__ import annotations
 
 import logging
+import socket
 import threading
 import time
 import uuid
@@ -17,6 +18,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from multiprocessing import Event, Process
 from multiprocessing.connection import Client, Listener
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from pydantic import ValidationError
@@ -49,6 +51,32 @@ def _authkey_from_config(config: CeleryRootConfig) -> bytes | None:
     if not auth:
         return None
     return auth.encode("utf-8")
+
+
+def _socket_is_listening(path: Path) -> bool:
+    try:
+        sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    except OSError:
+        return False
+    try:
+        sock.settimeout(0.1)
+        sock.connect(str(path))
+    except OSError:
+        return False
+    else:
+        return True
+    finally:
+        with suppress(OSError):
+            sock.close()
+
+
+def _prepare_socket(path: Path) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    if path.exists():
+        if _socket_is_listening(path):
+            msg = f"RPC socket already in use: {path}"
+            raise RuntimeError(msg)
+        path.unlink(missing_ok=True)
 
 
 def _build_backend(
@@ -89,7 +117,7 @@ class DBManager(Process):
         self._controller_factory = controller_factory
         self._stop_event = Event()
         self._logger = logging.getLogger(__name__)
-        self._address = (config.database.rpc_host, config.database.rpc_port)
+        self._address = config.database.rpc_address()
         self._authkey = _authkey_from_config(config)
 
     def stop(self) -> None:
@@ -112,6 +140,7 @@ class DBManager(Process):
             self._serve(controller)
         except KeyboardInterrupt:
             self._logger.info("DBManager interrupted; shutting down.")
+            self._stop_event.set()
         finally:
             controller.close()
             self._logger.info("DBManager stopped.")
@@ -119,26 +148,39 @@ class DBManager(Process):
     def _serve(self, controller: BaseDBController) -> None:
         lock = threading.Lock()
         inflight = threading.BoundedSemaphore(self._config.database.rpc_max_inflight)
-        listener = Listener(self._address, authkey=self._authkey)
-        self._logger.info("DBManager listening on %s:%s", *self._address)
+        address = self._address
+        socket_path = Path(address)
+        _prepare_socket(socket_path)
+        listener = Listener(address, authkey=self._authkey)
+        with suppress(OSError):
+            socket_path.chmod(0o600)
+        self._logger.info("DBManager listening on %s", socket_path)
 
         def _watch_stop() -> None:
             self._stop_event.wait()
             with suppress(Exception):
                 listener.close()
+            with suppress(OSError):
+                socket_path.unlink()
 
         threading.Thread(target=_watch_stop, daemon=True).start()
 
-        while not self._stop_event.is_set():
-            try:
-                conn = listener.accept()
-            except OSError:
-                break
-            threading.Thread(
-                target=self._handle_connection,
-                args=(conn, controller, lock, inflight),
-                daemon=True,
-            ).start()
+        try:
+            while not self._stop_event.is_set():
+                try:
+                    conn = listener.accept()
+                except OSError:
+                    break
+                threading.Thread(
+                    target=self._handle_connection,
+                    args=(conn, controller, lock, inflight),
+                    daemon=True,
+                ).start()
+        finally:
+            with suppress(Exception):
+                listener.close()
+            with suppress(OSError):
+                socket_path.unlink()
 
     def _handle_connection(
         self,
