@@ -76,7 +76,6 @@ demo_graph_tasks:
 	uv run python demo/schedule_demo_tasks.py
 
 demo_root: clean build
-	uv run python celery_root/components/web/manage.py migrate
 	uv run python demo/main.py
 
 apply_license:

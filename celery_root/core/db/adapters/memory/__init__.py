@@ -64,6 +64,14 @@ def _percentile(values: list[float], pct: float) -> float | None:
     return values[lower] + (values[upper] - values[lower]) * weight
 
 
+def _merge_retries(existing: int | None, incoming: int | None) -> int | None:
+    if incoming is None:
+        return existing
+    if existing is None:
+        return incoming
+    return max(existing, incoming)
+
+
 class MemoryController(BaseDBController):
     """In-memory controller."""
 
@@ -356,33 +364,36 @@ class MemoryController(BaseDBController):
     @staticmethod
     def _apply_task_event(task: Task, event: TaskEvent) -> None:
         preserve = MemoryController._should_preserve_state(task.state, event.state)
-        if not preserve:
-            task.state = event.state
-        if not preserve:
-            updates = {
-                "name": event.name,
-                "worker": event.worker,
-                "args": event.args,
-                "kwargs_": event.kwargs_,
-                "result": event.result,
-                "traceback": event.traceback,
-                "stamps": event.stamps,
-                "runtime": event.runtime,
-                "retries": event.retries,
-                "parent_id": event.parent_id,
-                "root_id": event.root_id,
-                "group_id": event.group_id,
-                "chord_id": event.chord_id,
-            }
-            for field_name, value in updates.items():
-                if value is not None:
-                    setattr(task, field_name, value)
-            if event.state == "RECEIVED" or (event.state == "PENDING" and task.received is None):
-                task.received = event.timestamp
-            elif event.state == "STARTED":
-                task.started = event.timestamp
-            elif event.state in _FINAL_STATES:
-                task.finished = event.timestamp
+        merged_retries = _merge_retries(task.retries, event.retries)
+        if merged_retries is not None and merged_retries != task.retries:
+            task.retries = merged_retries
+        if preserve:
+            return
+        task.state = event.state
+        updates = {
+            "name": event.name,
+            "worker": event.worker,
+            "args": event.args,
+            "kwargs_": event.kwargs_,
+            "result": event.result,
+            "traceback": event.traceback,
+            "stamps": event.stamps,
+            "runtime": event.runtime,
+            "retries": merged_retries,
+            "parent_id": event.parent_id,
+            "root_id": event.root_id,
+            "group_id": event.group_id,
+            "chord_id": event.chord_id,
+        }
+        for field_name, value in updates.items():
+            if value is not None:
+                setattr(task, field_name, value)
+        if event.state == "RECEIVED" or (event.state == "PENDING" and task.received is None):
+            task.received = event.timestamp
+        elif event.state == "STARTED":
+            task.started = event.timestamp
+        elif event.state in _FINAL_STATES:
+            task.finished = event.timestamp
 
     @staticmethod
     def _should_preserve_state(existing_state: str, incoming_state: str) -> bool:

@@ -831,7 +831,7 @@ def _build_stats_rows(tasks: Sequence[Task]) -> list[dict[str, object]]:
         counts[name] = counts.get(name, 0) + 1
         if task.state == "FAILURE":
             failures[name] = failures.get(name, 0) + 1
-        if task.state == "RETRY":
+        if (task.retries or 0) > 0 or task.state == "RETRY":
             retries[name] = retries.get(name, 0) + 1
         if task.runtime is not None:
             runtimes.setdefault(name, []).append(float(task.runtime))

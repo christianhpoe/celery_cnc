@@ -95,6 +95,19 @@ def test_store_and_get_task(controller: BaseDBController) -> None:
     assert task.finished is not None
 
 
+def test_retries_update_without_state_regression(controller: BaseDBController) -> None:
+    base = datetime(2024, 1, 1, 13, 0, 0, tzinfo=UTC)
+    controller.store_task_event(_task_event("t1", "STARTED", base, retries=0))
+    controller.store_task_event(_task_event("t1", "PENDING", base + timedelta(seconds=1), retries=1))
+    controller.store_task_event(_task_event("t1", "SUCCESS", base + timedelta(seconds=2)))
+    controller.store_task_event(_task_event("t1", "PENDING", base + timedelta(seconds=3), retries=0))
+
+    task = controller.get_task("t1")
+    assert task is not None
+    assert task.state == "SUCCESS"
+    assert task.retries == 1
+
+
 def test_filters_and_search(controller: BaseDBController) -> None:
     base = datetime(2024, 1, 2, 9, 0, 0, tzinfo=UTC)
     controller.store_task_event(_task_event("t1", "SUCCESS", base, name="tests.add", args="1,2", worker="w1"))

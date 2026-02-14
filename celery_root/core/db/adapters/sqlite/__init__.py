@@ -126,6 +126,14 @@ def _as_optional_datetime(value: object) -> datetime | None:
     return cast("datetime | None", value)
 
 
+def _merge_retries(existing: int | None, incoming: int | None) -> int | None:
+    if incoming is None:
+        return existing
+    if existing is None:
+        return incoming
+    return max(existing, incoming)
+
+
 class SQLiteController(BaseDBController):
     """SQLite-backed controller."""
 
@@ -184,8 +192,8 @@ class SQLiteController(BaseDBController):
         """Persist a task event and update the task record."""
         event_values = self._event_values(event)
         with self._engine.begin() as conn:
-            existing_state = self._get_task_state(conn, event.task_id)
-            task_values = self._task_values_from_event(event, existing_state)
+            existing_state, existing_retries = self._get_task_state_and_retries(conn, event.task_id)
+            task_values = self._task_values_from_event(event, existing_state, existing_retries)
             update_values = dict(task_values)
             update_values.pop("task_id", None)
             stmt = sqlite_insert(self._tasks).values(**task_values)
@@ -566,14 +574,22 @@ class SQLiteController(BaseDBController):
             "chord_id": event.chord_id,
         }
 
-    def _task_values_from_event(self, event: TaskEvent, existing_state: str | None) -> dict[str, object]:
+    def _task_values_from_event(
+        self,
+        event: TaskEvent,
+        existing_state: str | None,
+        existing_retries: int | None,
+    ) -> dict[str, object]:
         values: dict[str, object] = {
             "task_id": event.task_id,
             "state": event.state,
         }
         preserve = existing_state is not None and self._should_preserve_state(existing_state, event.state)
+        merged_retries = _merge_retries(existing_retries, event.retries)
         if preserve:
             values["state"] = existing_state
+            if merged_retries is not None and merged_retries != existing_retries:
+                values["retries"] = merged_retries
         else:
             updates = {
                 "name": event.name,
@@ -584,7 +600,7 @@ class SQLiteController(BaseDBController):
                 "traceback": event.traceback,
                 "stamps": event.stamps,
                 "runtime": event.runtime,
-                "retries": event.retries,
+                "retries": merged_retries,
                 "parent_id": event.parent_id,
                 "root_id": event.root_id,
                 "group_id": event.group_id,
@@ -599,13 +615,15 @@ class SQLiteController(BaseDBController):
                 values["finished"] = event.timestamp
         return values
 
-    def _get_task_state(self, conn: Connection, task_id: str) -> str | None:
+    def _get_task_state_and_retries(self, conn: Connection, task_id: str) -> tuple[str | None, int | None]:
         row = conn.execute(
-            select(self._tasks.c.state).where(self._tasks.c.task_id == task_id),
+            select(self._tasks.c.state, self._tasks.c.retries).where(self._tasks.c.task_id == task_id),
         ).first()
-        if row is None or row[0] is None:
-            return None
-        return str(row[0])
+        if row is None:
+            return None, None
+        state_value = str(row[0]) if row[0] is not None else None
+        retries_value = _as_optional_int(row[1])
+        return state_value, retries_value
 
     @staticmethod
     def _should_preserve_state(existing_state: str, incoming_state: str) -> bool:

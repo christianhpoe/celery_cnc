@@ -73,9 +73,9 @@ def sleep_retry_randomly(
     self: Task[Any, Any],
     min_seconds: float = 0.5,
     max_seconds: float = 2.0,
-    retry_rate: float = 0.3,
+    retry_rate: float = 0.25,
 ) -> str:
-    """Sleep for a random duration and occasionally retry."""
+    """Sleep for a random duration and retry with a decreasing probability."""
     if min_seconds < 0 or max_seconds < 0:
         message = "sleep bounds must be non-negative"
         raise ValueError(message)
@@ -87,7 +87,10 @@ def sleep_retry_randomly(
         raise ValueError(message)
     duration = random.uniform(min_seconds, max_seconds)  # noqa: S311
     time.sleep(duration)
-    if random.random() < retry_rate:  # noqa: S311
+    time.sleep(1.0)
+    retries = getattr(self.request, "retries", 0)
+    retry_prob = max(0.0, 1.0 - (retry_rate * retries))
+    if random.random() < retry_prob:  # noqa: S311
         countdown = random.uniform(0.5, 2.0)  # noqa: S311
         raise self.retry(exc=RuntimeError("Random sleep retry"), countdown=countdown)
     return "ok"
