@@ -33,7 +33,7 @@ if TYPE_CHECKING:
     from celery import Celery
     from django.http import HttpRequest, HttpResponse, QueryDict
 
-    from celery_root.core.db.adapters.base import BaseDBController
+    from celery_root.core.db import DbClient
     from celery_root.core.db.models import TaskRelation
 
 _TASK_NOT_FOUND = "Task not found"
@@ -74,6 +74,8 @@ _SORT_DIRECTIONS = ("asc", "desc")
 _STATS_SORT_FIELDS: dict[str, str] = {
     "name": "Task",
     "count": "Count",
+    "failure_rate": "Failure rate",
+    "retry_rate": "Retry rate",
     "avg": "Avg runtime",
     "p95": "P95",
     "p99": "P99",
@@ -213,7 +215,7 @@ def _task_to_view(task: Task) -> _TaskView:
         "done": state in _FINAL_STATES,
         "timestamp": timestamp,
         "args": task.args or "",
-        "kwargs": task.kwargs or "",
+        "kwargs": task.kwargs_ or "",
         "retries": task.retries,
         "result": task.result,
         "traceback": task.traceback,
@@ -821,15 +823,25 @@ def _percentile(values: list[float], pct: float) -> float | None:
 
 def _build_stats_rows(tasks: Sequence[Task]) -> list[dict[str, object]]:
     counts: dict[str, int] = {}
+    failures: dict[str, int] = {}
+    retries: dict[str, int] = {}
     runtimes: dict[str, list[float]] = {}
     for task in tasks:
         name = task.name or "unknown"
         counts[name] = counts.get(name, 0) + 1
+        if task.state == "FAILURE":
+            failures[name] = failures.get(name, 0) + 1
+        if (task.retries or 0) > 0 or task.state == "RETRY":
+            retries[name] = retries.get(name, 0) + 1
         if task.runtime is not None:
             runtimes.setdefault(name, []).append(float(task.runtime))
 
     rows: list[dict[str, object]] = []
     for name, count in counts.items():
+        failure_count = failures.get(name, 0)
+        failure_rate = (failure_count / count) * 100.0 if count else None
+        retry_count = retries.get(name, 0)
+        retry_rate = (retry_count / count) * 100.0 if count else None
         values = sorted(runtimes.get(name, []))
         if values:
             min_runtime = values[0]
@@ -847,6 +859,8 @@ def _build_stats_rows(tasks: Sequence[Task]) -> list[dict[str, object]]:
             {
                 "name": name,
                 "count": count,
+                "failure_rate": failure_rate,
+                "retry_rate": retry_rate,
                 "min": min_runtime,
                 "max": max_runtime,
                 "avg": avg_runtime,
@@ -1088,7 +1102,7 @@ def _build_relations(task: Task) -> list[dict[str, str]]:
     return steps
 
 
-def _build_task_link(db: BaseDBController, task_id: str) -> _TaskLink:
+def _build_task_link(db: DbClient, task_id: str) -> _TaskLink:
     task = db.get_task(task_id)
     if task is None:
         return {
@@ -1184,7 +1198,7 @@ def build_relations(task: _TaskEntry) -> list[dict[str, str]]:
         finished=task.get("finished"),
         runtime=task["runtime"],
         args=task["args"],
-        kwargs=task["kwargs"],
+        kwargs_=task["kwargs"],
         result=task["result"],
         traceback=task["traceback"],
         retries=task["retries"],
@@ -1296,7 +1310,7 @@ def task_retry(_request: HttpRequest, task_id: str) -> HttpResponse:
         return HttpResponseBadRequest("No Celery workers configured")
 
     args = _parse_args(task.args or "")
-    kwargs = _parse_kwargs(task.kwargs or "")
+    kwargs = _parse_kwargs(task.kwargs_ or "")
     args = cast("list[object]", _strip_ellipsis(args))
     kwargs = cast("dict[str, object]", _strip_ellipsis(kwargs))
     worker_name = app_name(apps[0])

@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from celery_root.core.db.adapters.memory import MemoryController
+from celery_root.core.db.adapters.memory import MemoryController, MemoryLimits
 from celery_root.core.db.adapters.sqlite import SQLiteController
 from celery_root.core.db.models import (
     Schedule,
@@ -48,7 +48,7 @@ def _task_event(  # noqa: PLR0913
     name: str = "tests.add",
     worker: str | None = None,
     args: str | None = None,
-    kwargs: str | None = None,
+    kwargs_: str | None = None,
     result: str | None = None,
     traceback: str | None = None,
     runtime: float | None = None,
@@ -67,7 +67,7 @@ def _task_event(  # noqa: PLR0913
         timestamp=timestamp,
         worker=worker,
         args=args,
-        kwargs=kwargs,
+        kwargs_=kwargs_,
         result=result,
         traceback=traceback,
         runtime=runtime,
@@ -95,6 +95,19 @@ def test_store_and_get_task(controller: BaseDBController) -> None:
     assert task.finished is not None
 
 
+def test_retries_update_without_state_regression(controller: BaseDBController) -> None:
+    base = datetime(2024, 1, 1, 13, 0, 0, tzinfo=UTC)
+    controller.store_task_event(_task_event("t1", "STARTED", base, retries=0))
+    controller.store_task_event(_task_event("t1", "PENDING", base + timedelta(seconds=1), retries=1))
+    controller.store_task_event(_task_event("t1", "SUCCESS", base + timedelta(seconds=2)))
+    controller.store_task_event(_task_event("t1", "PENDING", base + timedelta(seconds=3), retries=0))
+
+    task = controller.get_task("t1")
+    assert task is not None
+    assert task.state == "SUCCESS"
+    assert task.retries == 1
+
+
 def test_filters_and_search(controller: BaseDBController) -> None:
     base = datetime(2024, 1, 2, 9, 0, 0, tzinfo=UTC)
     controller.store_task_event(_task_event("t1", "SUCCESS", base, name="tests.add", args="1,2", worker="w1"))
@@ -105,7 +118,7 @@ def test_filters_and_search(controller: BaseDBController) -> None:
             "SUCCESS",
             base + timedelta(minutes=2),
             name="tests.add",
-            kwargs='{"x": 1}',
+            kwargs_='{"x": 1}',
         ),
     )
 
@@ -188,3 +201,16 @@ def test_cleanup(controller: BaseDBController) -> None:
     controller.store_task_event(_task_event("t1", "SUCCESS", old))
     removed = controller.cleanup(older_than_days=1)
     assert removed >= 1
+
+
+def test_memory_limits_evict_old_tasks() -> None:
+    controller = MemoryController(limits=MemoryLimits(max_tasks=2))
+    controller.initialize()
+    base = datetime(2024, 1, 6, 0, 0, 0, tzinfo=UTC)
+    controller.store_task_event(_task_event("t1", "SUCCESS", base))
+    controller.store_task_event(_task_event("t2", "SUCCESS", base + timedelta(seconds=1)))
+    controller.store_task_event(_task_event("t3", "SUCCESS", base + timedelta(seconds=2)))
+
+    assert controller.get_task("t1") is None
+    assert controller.get_task("t2") is not None
+    assert controller.get_task("t3") is not None

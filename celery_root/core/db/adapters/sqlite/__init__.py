@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import json
 import os
-from dataclasses import asdict
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING, cast
@@ -127,6 +126,14 @@ def _as_optional_datetime(value: object) -> datetime | None:
     return cast("datetime | None", value)
 
 
+def _merge_retries(existing: int | None, incoming: int | None) -> int | None:
+    if incoming is None:
+        return existing
+    if existing is None:
+        return incoming
+    return max(existing, incoming)
+
+
 class SQLiteController(BaseDBController):
     """SQLite-backed controller."""
 
@@ -159,6 +166,12 @@ class SQLiteController(BaseDBController):
             version = conn.execute(select(self._schema_version.c.version)).scalar_one_or_none()
         return int(version or 0)
 
+    def ensure_schema(self) -> None:
+        """Ensure the stored schema is up to date."""
+        current = self.get_schema_version()
+        if current != self._SCHEMA_VERSION:
+            self.migrate(current, self._SCHEMA_VERSION)
+
     def migrate(self, from_version: int, to_version: int) -> None:
         """Migrate schema version metadata."""
         if from_version == to_version:
@@ -179,8 +192,8 @@ class SQLiteController(BaseDBController):
         """Persist a task event and update the task record."""
         event_values = self._event_values(event)
         with self._engine.begin() as conn:
-            existing_state = self._get_task_state(conn, event.task_id)
-            task_values = self._task_values_from_event(event, existing_state)
+            existing_state, existing_retries = self._get_task_state_and_retries(conn, event.task_id)
+            task_values = self._task_values_from_event(event, existing_state, existing_retries)
             update_values = dict(task_values)
             update_values.pop("task_id", None)
             stmt = sqlite_insert(self._tasks).values(**task_values)
@@ -265,7 +278,7 @@ class SQLiteController(BaseDBController):
     def store_task_relation(self, relation: TaskRelation) -> None:
         """Persist a task relation edge."""
         with self._engine.begin() as conn:
-            conn.execute(self._task_relations.insert().values(**asdict(relation)))
+            conn.execute(self._task_relations.insert().values(**relation.model_dump()))
 
     def get_task_relations(self, root_id: str) -> list[TaskRelation]:
         """Return task relations for a root task."""
@@ -547,7 +560,7 @@ class SQLiteController(BaseDBController):
             "timestamp": event.timestamp,
             "worker": event.worker,
             "args": event.args,
-            "kwargs": event.kwargs,
+            "kwargs": event.kwargs_,
             "result": event.result,
             "traceback": event.traceback,
             "stamps": event.stamps,
@@ -561,25 +574,33 @@ class SQLiteController(BaseDBController):
             "chord_id": event.chord_id,
         }
 
-    def _task_values_from_event(self, event: TaskEvent, existing_state: str | None) -> dict[str, object]:
+    def _task_values_from_event(
+        self,
+        event: TaskEvent,
+        existing_state: str | None,
+        existing_retries: int | None,
+    ) -> dict[str, object]:
         values: dict[str, object] = {
             "task_id": event.task_id,
             "state": event.state,
         }
         preserve = existing_state is not None and self._should_preserve_state(existing_state, event.state)
+        merged_retries = _merge_retries(existing_retries, event.retries)
         if preserve:
             values["state"] = existing_state
+            if merged_retries is not None and merged_retries != existing_retries:
+                values["retries"] = merged_retries
         else:
             updates = {
                 "name": event.name,
                 "worker": event.worker,
                 "args": event.args,
-                "kwargs": event.kwargs,
+                "kwargs": event.kwargs_,
                 "result": event.result,
                 "traceback": event.traceback,
                 "stamps": event.stamps,
                 "runtime": event.runtime,
-                "retries": event.retries,
+                "retries": merged_retries,
                 "parent_id": event.parent_id,
                 "root_id": event.root_id,
                 "group_id": event.group_id,
@@ -594,13 +615,15 @@ class SQLiteController(BaseDBController):
                 values["finished"] = event.timestamp
         return values
 
-    def _get_task_state(self, conn: Connection, task_id: str) -> str | None:
+    def _get_task_state_and_retries(self, conn: Connection, task_id: str) -> tuple[str | None, int | None]:
         row = conn.execute(
-            select(self._tasks.c.state).where(self._tasks.c.task_id == task_id),
+            select(self._tasks.c.state, self._tasks.c.retries).where(self._tasks.c.task_id == task_id),
         ).first()
-        if row is None or row[0] is None:
-            return None
-        return str(row[0])
+        if row is None:
+            return None, None
+        state_value = str(row[0]) if row[0] is not None else None
+        retries_value = _as_optional_int(row[1])
+        return state_value, retries_value
 
     @staticmethod
     def _should_preserve_state(existing_state: str, incoming_state: str) -> bool:
@@ -622,7 +645,7 @@ class SQLiteController(BaseDBController):
             finished=_coerce_dt(_as_optional_datetime(row.get("finished"))),
             runtime=_as_optional_float(row.get("runtime")),
             args=_as_optional_str(row.get("args")),
-            kwargs=_as_optional_str(row.get("kwargs")),
+            kwargs_=_as_optional_str(row.get("kwargs")),
             result=_as_optional_str(row.get("result")),
             traceback=_as_optional_str(row.get("traceback")),
             stamps=_as_optional_str(row.get("stamps")),
@@ -656,7 +679,7 @@ class SQLiteController(BaseDBController):
             task=_as_str(row["task"]),
             schedule=_as_str(row["schedule"]),
             args=_as_optional_str(row.get("args")),
-            kwargs=_as_optional_str(row.get("kwargs")),
+            kwargs_=_as_optional_str(row.get("kwargs")),
             enabled=bool(row.get("enabled")),
             last_run_at=_coerce_dt(_as_optional_datetime(row.get("last_run_at"))),
             total_run_count=_as_optional_int(row.get("total_run_count")),
@@ -830,7 +853,7 @@ class SQLiteController(BaseDBController):
             "task": schedule.task,
             "schedule": schedule.schedule,
             "args": schedule.args,
-            "kwargs": schedule.kwargs,
+            "kwargs": schedule.kwargs_,
             "enabled": schedule.enabled,
             "last_run_at": schedule.last_run_at,
             "total_run_count": schedule.total_run_count,

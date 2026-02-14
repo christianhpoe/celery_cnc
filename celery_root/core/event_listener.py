@@ -22,11 +22,14 @@ from kombu.exceptions import OperationalError
 
 from celery_root.config import set_settings
 from celery_root.core.db.models import TaskEvent, TaskRelation, WorkerEvent
+from celery_root.core.db.rpc_client import DbRpcClient, RpcCallError
 from celery_root.core.logging.setup import configure_process_logging
 from celery_root.core.logging.utils import sanitize_component
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
+    from collections.abc import Callable, Sequence
+
+    from kombu.connection import Connection
 
     from celery_root.config import CeleryRootConfig
 
@@ -45,31 +48,48 @@ _ENABLE_EVENTS_INTERVAL = 30.0
 _HEARTBEAT_INTERVAL = 60.0
 
 
+class _ManagedEventReceiver(EventReceiver):
+    """Event receiver that delegates per-iteration bookkeeping."""
+
+    def __init__(
+        self,
+        channel: Connection,
+        *,
+        handlers: dict[str, object],
+        app: Celery,
+        on_iteration: Callable[[], None],
+    ) -> None:
+        super().__init__(channel, handlers=handlers, app=app)
+        self._on_iteration = on_iteration
+
+    def on_iteration(self) -> None:
+        self._on_iteration()
+
+
 class EventListener(Process):
     """Listen to Celery events for a single broker."""
 
     def __init__(
         self,
         broker_url: str,
-        queue: Queue[object],
         config: CeleryRootConfig | None = None,
-        extra_queues: Sequence[Queue[object]] | None = None,
+        metrics_queues: Sequence[Queue[object]] | None = None,
     ) -> None:
         """Create an event listener for a broker URL."""
         super().__init__(daemon=True)
         self.broker_url = broker_url
-        self._queue = queue
-        self._extra_queues = list(extra_queues or [])
+        self._metrics_queues = list(metrics_queues or [])
         self._config = config
         self._stop_event = Event()
         self._logger = logging.getLogger(__name__)
+        self._db_client: DbRpcClient | None = None
 
     def stop(self) -> None:
         """Signal the listener to stop."""
         self._stop_event.set()
 
     def run(self) -> None:
-        """Listen for events and forward them onto the queue."""
+        """Listen for events and forward them to the DB manager and metrics queues."""
         component = f"event_listener-{sanitize_component(self.broker_url)}"
         if self._config is not None:
             set_settings(self._config)
@@ -77,6 +97,8 @@ class EventListener(Process):
         else:
             configure_process_logging(component=component)
         self._logger.info("EventListener starting for %s", self.broker_url)
+        if self._config is not None:
+            self._db_client = DbRpcClient.from_config(self._config, client_name=component)
         app = Celery(broker=self.broker_url)
         last_heartbeat = time.monotonic()
         while not self._stop_event.is_set():
@@ -92,26 +114,34 @@ class EventListener(Process):
                 self._logger.exception("EventListener error for %s", self.broker_url)
                 time.sleep(1.0)
         self._logger.info("EventListener stopped for %s", self.broker_url)
+        if self._db_client is not None:
+            self._db_client.close()
 
     def _listen(self, app: Celery, last_heartbeat: float) -> float:
         with app.connection() as connection:
             self._logger.info("EventListener connected to %s", self.broker_url)
             last_enable = 0.0
-            receiver = EventReceiver(
+            last_heartbeat_box = [last_heartbeat]
+            last_enable_box = [last_enable]
+
+            def _on_iteration() -> None:
+                now = time.monotonic()
+                last_heartbeat_box[0] = self._maybe_log_heartbeat(now, last_heartbeat_box[0])
+                last_enable_box[0] = self._maybe_enable_events(app, last_enable_box[0])
+                if self._stop_event.is_set():
+                    receiver.should_stop = True
+
+            receiver = _ManagedEventReceiver(
                 connection,
                 handlers={"*": self._handle_event},
                 app=app,
+                on_iteration=_on_iteration,
             )
             try:
-                while not self._stop_event.is_set():
-                    now = time.monotonic()
-                    last_heartbeat = self._maybe_log_heartbeat(now, last_heartbeat)
-                    last_enable = self._maybe_enable_events(app, last_enable)
-                    if not self._capture_once(receiver):
-                        break
+                receiver.capture(limit=None, timeout=None, wakeup=True)
             finally:
                 self._logger.info("EventListener disconnected from %s", self.broker_url)
-        return last_heartbeat
+        return last_heartbeat_box[0]
 
     def _maybe_log_heartbeat(self, now: float, last_heartbeat: float) -> float:
         if now - last_heartbeat >= _HEARTBEAT_INTERVAL:
@@ -131,16 +161,6 @@ class EventListener(Process):
             now = time.monotonic()
             self._logger.info("Enabled events for workers on %s", self.broker_url)
             return now
-
-    def _capture_once(self, receiver: EventReceiver) -> bool:
-        try:
-            receiver.capture(limit=None, timeout=1.0, wakeup=True)
-        except TimeoutError:
-            return True
-        except KeyboardInterrupt:
-            self._stop_event.set()
-            return False
-        return True
 
     def _handle_event(self, event: dict[str, object]) -> None:
         event_type = str(event.get("type", ""))
@@ -168,7 +188,7 @@ class EventListener(Process):
             timestamp=_event_timestamp(event),
             worker=_stringify(event.get("hostname")),
             args=_stringify(args),
-            kwargs=_stringify(kwargs),
+            kwargs_=_stringify(kwargs),
             result=_stringify(result),
             traceback=_stringify(event.get("traceback")),
             stamps=_stringify(_extract_stamps(event)),
@@ -190,6 +210,7 @@ class EventListener(Process):
         if event_type in {"worker-online", "worker-offline"}:
             self._logger.info("Worker %s event from %s: %s", hostname, self.broker_url, event_type)
         info = {key: value for key, value in event.items() if key not in {"type", "timestamp"}}
+        info = _json_safe(info)
         worker_event = WorkerEvent(
             hostname=str(hostname),
             event=event_type,
@@ -217,14 +238,27 @@ class EventListener(Process):
         )
 
     def _emit(self, item: object, *, fanout: bool = True) -> None:
-        self._queue.put(item)
-        if not fanout or not self._extra_queues:
+        self._send_to_db(item)
+        if not fanout or not self._metrics_queues:
             return
-        for queue in self._extra_queues:
+        for queue in self._metrics_queues:
             try:
                 queue.put_nowait(item)
             except Full:
                 self._logger.debug("Dropping event for full metrics queue: %s", type(item).__name__)
+
+    def _send_to_db(self, item: object) -> None:
+        if self._db_client is None:
+            return
+        try:
+            if isinstance(item, TaskEvent):
+                self._db_client.store_task_event(item)
+            elif isinstance(item, WorkerEvent):
+                self._db_client.store_worker_event(item)
+            elif isinstance(item, TaskRelation):
+                self._db_client.store_task_relation(item)
+        except (RpcCallError, RuntimeError) as exc:
+            self._logger.warning("DB RPC failed for %s: %s", type(item).__name__, exc)
 
 
 def _event_timestamp(event: dict[str, object]) -> datetime:
@@ -247,6 +281,16 @@ def _event_received_timestamp(event: dict[str, object]) -> datetime:
             return raw.replace(tzinfo=UTC)
         return raw
     return _event_timestamp(event)
+
+
+def _json_safe(value: dict[str, object]) -> dict[str, object]:
+    try:
+        safe = json.loads(json.dumps(value, default=str))
+    except (TypeError, ValueError):  # pragma: no cover - defensive
+        return {"value": str(value)}
+    if isinstance(safe, dict):
+        return safe
+    return {"value": safe}
 
 
 def _event_field(event: dict[str, object], *keys: str) -> object | None:

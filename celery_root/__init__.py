@@ -18,6 +18,8 @@ from typing import TYPE_CHECKING
 from .config import (
     BeatConfig,
     CeleryRootConfig,
+    DatabaseConfigBase,
+    DatabaseConfigMemory,
     DatabaseConfigSqlite,
     FrontendConfig,
     LoggingConfigFile,
@@ -60,14 +62,15 @@ class CeleryRoot:
         if retention_days is not None:
             if retention_days <= 0:
                 raise ValueError(_RETENTION_ARG_POSITIVE_ERROR)
-            config = config.model_copy(
-                update={
-                    "database": config.database.model_copy(
-                        update={"retention_days": retention_days},
-                    ),
-                },
-            )
-        if purge_db is not None:
+            if isinstance(config.database, DatabaseConfigSqlite):
+                config = config.model_copy(
+                    update={
+                        "database": config.database.model_copy(
+                            update={"retention_days": retention_days},
+                        ),
+                    },
+                )
+        if purge_db is not None and isinstance(config.database, DatabaseConfigSqlite):
             config = config.model_copy(
                 update={
                     "database": config.database.model_copy(
@@ -83,7 +86,7 @@ class CeleryRoot:
         self._db_controller = db_controller
         self._process_manager: ProcessManager | None = None
         self._ensure_sqlite_db_path()
-        if self.config.database.purge_db:
+        if isinstance(self.config.database, DatabaseConfigSqlite) and self.config.database.purge_db:
             self._purge_existing_db()
         if self.config.beat is not None and self.config.beat.delete_schedules_on_boot:
             self._purge_schedule_file()
@@ -95,18 +98,30 @@ class CeleryRoot:
         self._process_manager = manager
         manager.run()
 
-    def _resolve_db_controller_factory(self) -> Callable[[], BaseDBController]:
+    def _resolve_db_controller_factory(self) -> Callable[[], BaseDBController] | None:
         if self._db_controller is not None and callable(self._db_controller):
             return self._db_controller
         if isinstance(self._db_controller, SQLiteController):
-            path = getattr(self._db_controller, "_path", self.config.database.db_path)
-            return functools.partial(_make_sqlite_controller, path)
+            path = getattr(self._db_controller, "_path", None)
+            resolved = Path(path).expanduser().resolve() if path is not None else None
+            if isinstance(self.config.database, DatabaseConfigSqlite):
+                db_path = resolved or self.config.database.db_path
+                db_config = self.config.database.model_copy(update={"db_path": db_path})
+            else:
+                db_path = resolved or Path("./celery_root.db")
+                db_config = DatabaseConfigSqlite(db_path=db_path)
+            self.config = self.config.model_copy(update={"database": db_config})
+            return None
         if isinstance(self._db_controller, MemoryController):
-            return functools.partial(_return_controller, self._db_controller)
+            if not isinstance(self.config.database, DatabaseConfigMemory):
+                self.config = self.config.model_copy(
+                    update={"database": DatabaseConfigMemory()},
+                )
+            return None
         if isinstance(self._db_controller, BaseDBController):
             controller = self._db_controller
             return functools.partial(_return_controller, controller)
-        return functools.partial(_make_sqlite_controller, self.config.database.db_path)
+        return None
 
     def _ensure_sqlite_db_path(self) -> None:
         controller = self._db_controller
@@ -114,16 +129,25 @@ class CeleryRoot:
             if isinstance(controller, SQLiteController):
                 raw_path = getattr(controller, "_path", None)
                 if raw_path is not None:
-                    self.config.database.db_path = Path(raw_path).expanduser().resolve()
+                    resolved = Path(raw_path).expanduser().resolve()
+                    if isinstance(self.config.database, DatabaseConfigSqlite):
+                        db_config = self.config.database.model_copy(update={"db_path": resolved})
+                    else:
+                        db_config = DatabaseConfigSqlite(db_path=resolved)
+                    self.config = self.config.model_copy(update={"database": db_config})
                 return
             if isinstance(controller, BaseDBController) or callable(controller):
                 return
+        if not isinstance(self.config.database, DatabaseConfigSqlite):
+            return
 
         path = Path(self.config.database.db_path).expanduser()
         path = (Path.cwd() / path).resolve() if not path.is_absolute() else path.resolve()
         self.config.database.db_path = path
 
     def _purge_existing_db(self) -> None:
+        if not isinstance(self.config.database, DatabaseConfigSqlite):
+            return
         path = self._resolve_purge_path()
         if path is None:
             return
@@ -142,10 +166,16 @@ class CeleryRoot:
     def _resolve_purge_path(self) -> Path | None:
         controller = self._db_controller
         if controller is None:
-            return self.config.database.db_path
+            if isinstance(self.config.database, DatabaseConfigSqlite):
+                return self.config.database.db_path
+            return None
         if isinstance(controller, SQLiteController):
             raw_path = getattr(controller, "_path", None)
-            return Path(raw_path) if raw_path is not None else self.config.database.db_path
+            if raw_path is not None:
+                return Path(raw_path)
+            if isinstance(self.config.database, DatabaseConfigSqlite):
+                return self.config.database.db_path
+            return None
         return None
 
     def _purge_schedule_file(self) -> None:
@@ -260,6 +290,8 @@ __all__ = [
     "BeatConfig",
     "CeleryRoot",
     "CeleryRootConfig",
+    "DatabaseConfigBase",
+    "DatabaseConfigMemory",
     "DatabaseConfigSqlite",
     "FrontendConfig",
     "LoggingConfigFile",

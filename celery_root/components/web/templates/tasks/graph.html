@@ -39,7 +39,8 @@ SPDX-License-Identifier: BSD-3-Clause
       const meta = metaEl ? JSON.parse(metaEl.textContent) : {};
       const el = document.getElementById("dag-container");
       const themeAttr = document.documentElement.getAttribute("data-theme");
-      const theme = themeAttr && themeAttr !== "white" ? "dark" : "light";
+      const darkThemes = new Set(["dark", "darkula", "monokai", "solaris-dark"]);
+      const theme = themeAttr && darkThemes.has(themeAttr) ? "dark" : "light";
       if (el && window.CeleryDag?.render) {
         window.CeleryDag.render(el, { nodes, edges, meta }, {
           refreshUrl: "{{ graph_updates_url|escapejs }}",

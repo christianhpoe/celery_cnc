@@ -72,38 +72,6 @@ html[data-theme="dark"] {
   --traceback-error: #f87171;
 }
 
-html[data-theme="white"] {
-  --bg: #f6f7fb;
-  --panel-bg: #ffffff;
-  --panel-border: #e2e8f0;
-  --text-primary: #0f172a;
-  --text-muted: #64748b;
-  --accent: #2563eb;
-  --accent-strong: #1d4ed8;
-  --card-bg: #ffffff;
-  --card-border: #e2e8f0;
-  --badge-success: #16a34a;
-  --badge-warning: #ea580c;
-  --badge-danger: #dc2626;
-  --badge-info: #2563eb;
-  --badge-muted: #94a3b8;
-  --surface: #f8fafc;
-  --surface-strong: #f1f5f9;
-  --field-bg: #ffffff;
-  --table-head-bg: #f8fafc;
-  --border-subtle: #e2e8f0;
-  --dash-border: #cbd5f5;
-  --status-dot: #22c55e;
-  --json-key: #2563eb;
-  --json-string: #059669;
-  --json-number: #d97706;
-  --json-boolean: #7c3aed;
-  --json-null: #94a3b8;
-  --traceback-head: #f97316;
-  --traceback-file: #38bdf8;
-  --traceback-error: #ef4444;
-}
-
 html[data-theme="generic"] {
   --bg: #f4f4f5;
   --panel-bg: #ffffff;
@@ -200,7 +168,7 @@ html[data-theme="darkula"] {
   --traceback-error: #ff5555;
 }
 
-html[data-theme="solaris"] {
+html[data-theme="solaris-dark"] {
   --bg: #002b36;
   --panel-bg: #073642;
   --panel-border: #0f3b46;
@@ -227,6 +195,38 @@ html[data-theme="solaris"] {
   --json-number: #b58900;
   --json-boolean: #6c71c4;
   --json-null: #586e75;
+  --traceback-head: #b58900;
+  --traceback-file: #268bd2;
+  --traceback-error: #dc322f;
+}
+
+html[data-theme="solaris-bright"] {
+  --bg: #fdf6e3;
+  --panel-bg: #eee8d5;
+  --panel-border: #e1dac2;
+  --text-primary: #657b83;
+  --text-muted: #586e75;
+  --accent: #268bd2;
+  --accent-strong: #1e6fa8;
+  --card-bg: #f7f0dc;
+  --card-border: #e1dac2;
+  --badge-success: #859900;
+  --badge-warning: #b58900;
+  --badge-danger: #dc322f;
+  --badge-info: #268bd2;
+  --badge-muted: #93a1a1;
+  --surface: #fdf6e3;
+  --surface-strong: #eee8d5;
+  --field-bg: #fdf6e3;
+  --table-head-bg: #eee8d5;
+  --border-subtle: #e1dac2;
+  --dash-border: #d7ceb7;
+  --status-dot: #859900;
+  --json-key: #268bd2;
+  --json-string: #2aa198;
+  --json-number: #b58900;
+  --json-boolean: #6c71c4;
+  --json-null: #93a1a1;
   --traceback-head: #b58900;
   --traceback-file: #268bd2;
   --traceback-error: #dc322f;
@@ -1639,12 +1639,12 @@ textarea.json-input {
   background: #38bdf8;
 }
 
-.theme-swatch[data-theme-swatch="white"] {
-  background: #2563eb;
+.theme-swatch[data-theme-swatch="solaris-bright"] {
+  background: #268bd2;
 }
 
-.theme-swatch[data-theme-swatch="solaris"] {
-  background: #268bd2;
+.theme-swatch[data-theme-swatch="solaris-dark"] {
+  background: #073642;
 }
 
 .page-size-form select {
