@@ -33,7 +33,7 @@
 [data-theme="dark"],
 [data-theme="darkula"],
 [data-theme="monokai"],
-[data-theme="generic"] {
+[data-theme="solaris-dark"] {
   --dag-bg: #0b1118;
   --dag-surface: #111827;
   --dag-panel: #0f172a;
@@ -258,7 +258,7 @@
 [data-theme="dark"] .dag-panel-pre,
 [data-theme="darkula"] .dag-panel-pre,
 [data-theme="monokai"] .dag-panel-pre,
-[data-theme="generic"] .dag-panel-pre {
+[data-theme="solaris-dark"] .dag-panel-pre {
   background: rgba(15, 23, 42, 0.6);
 }
 

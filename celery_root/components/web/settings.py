@@ -72,9 +72,10 @@ STATICFILES_DIRS = [str(BASE_DIR / "static")]
 
 SESSION_ENGINE = "django.contrib.sessions.backends.signed_cookies"
 
-CELERY_ROOT_DB_PATH = Path(CONFIG.database.db_path)
+_DB_PATH = getattr(CONFIG.database, "db_path", None)
+CELERY_ROOT_DB_PATH = Path(_DB_PATH) if _DB_PATH is not None else Path("memory")
 CELERY_ROOT_LOG_DIR = Path(CONFIG.logging.log_dir)
-CELERY_ROOT_RETENTION_DAYS = int(CONFIG.database.retention_days)
+CELERY_ROOT_RETENTION_DAYS = int(getattr(CONFIG.database, "retention_days", 0))
 
 
 CELERY_ROOT_WORKERS = list(CONFIG.worker_import_paths)

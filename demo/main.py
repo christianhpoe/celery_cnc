@@ -14,7 +14,7 @@ from celery_root import (
     BeatConfig,
     CeleryRoot,
     CeleryRootConfig,
-    DatabaseConfigSqlite,
+    DatabaseConfigMemory,
     LoggingConfigFile,
     McpConfig,
     OpenTelemetryConfig,
@@ -29,7 +29,7 @@ def main() -> None:
     """Start the Root supervisor and dev web server."""
     config = CeleryRootConfig(
         logging=LoggingConfigFile(log_dir=Path("./demo/data/logs"), delete_on_boot=True),
-        database=DatabaseConfigSqlite(db_path=Path("./demo/data/sqlite3.db"), purge_db=True),
+        database=DatabaseConfigMemory(),
         open_telemetry=OpenTelemetryConfig(endpoint="http://localhost:4317"),
         beat=BeatConfig(schedule_path=Path("./demo/data/beat.schedule"), delete_schedules_on_boot=True),
         prometheus=PrometheusConfig(),

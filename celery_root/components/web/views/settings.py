@@ -25,8 +25,8 @@ _THEMES: tuple[tuple[str, str], ...] = (
     ("darkula", "Darkula"),
     ("generic", "Generic"),
     ("dark", "Dark"),
-    ("white", "White"),
-    ("solaris", "Solaris"),
+    ("solaris-bright", "Solaris Bright"),
+    ("solaris-dark", "Solaris Dark"),
 )
 
 

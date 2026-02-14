@@ -12,13 +12,19 @@
     darkula: "Darkula",
     generic: "Generic",
     dark: "Dark",
-    white: "White",
-    solaris: "Solaris",
+    "solaris-bright": "Solaris Bright",
+    "solaris-dark": "Solaris Dark",
   };
   const root = document.documentElement;
-  let activeTheme = "white";
+  let activeTheme = "generic";
 
   function normalizeTheme(theme) {
+    if (theme === "white") {
+      return "generic";
+    }
+    if (theme === "solaris") {
+      return "solaris-dark";
+    }
     if (theme && Object.prototype.hasOwnProperty.call(themes, theme)) {
       return theme;
     }
@@ -26,7 +32,7 @@
   }
 
   function applyTheme(theme) {
-    const normalized = normalizeTheme(theme) || "white";
+    const normalized = normalizeTheme(theme) || "generic";
     activeTheme = normalized;
     root.setAttribute("data-theme", normalized);
   }
@@ -36,7 +42,7 @@
     if (stored) {
       return stored;
     }
-    return "white";
+    return "generic";
   }
 
   function setTheme(theme, persist) {

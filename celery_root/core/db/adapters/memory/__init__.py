@@ -9,7 +9,8 @@
 from __future__ import annotations
 
 import functools
-from collections import defaultdict
+from collections import OrderedDict, defaultdict, deque
+from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
@@ -72,19 +73,46 @@ def _merge_retries(existing: int | None, incoming: int | None) -> int | None:
     return max(existing, incoming)
 
 
+def _bounded_deque[T](items: Iterable[T], limit: int | None) -> deque[T]:
+    return deque(items, maxlen=limit)
+
+
+@dataclass(frozen=True, slots=True)
+class MemoryLimits:
+    """Limits for in-memory storage growth."""
+
+    max_tasks: int | None = None
+    max_task_events: int | None = None
+    max_task_relations: int | None = None
+    max_workers: int | None = None
+    max_worker_events: int | None = None
+    max_schedules: int | None = None
+
+
 class MemoryController(BaseDBController):
     """In-memory controller."""
 
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        *,
+        limits: MemoryLimits | None = None,
+    ) -> None:
         """Initialize empty in-memory storage."""
         self._initialized = False
         self._schema_version = 4
-        self._tasks: dict[str, Task] = {}
-        self._task_events: list[TaskEvent] = []
-        self._task_relations: list[TaskRelation] = []
-        self._workers: dict[str, Worker] = {}
-        self._worker_events: list[WorkerEvent] = []
-        self._schedules: dict[str, Schedule] = {}
+        effective_limits = limits or MemoryLimits()
+        self._max_tasks = effective_limits.max_tasks
+        self._max_task_events = effective_limits.max_task_events
+        self._max_task_relations = effective_limits.max_task_relations
+        self._max_workers = effective_limits.max_workers
+        self._max_worker_events = effective_limits.max_worker_events
+        self._max_schedules = effective_limits.max_schedules
+        self._tasks: OrderedDict[str, Task] = OrderedDict()
+        self._task_events: deque[TaskEvent] = deque(maxlen=self._max_task_events)
+        self._task_relations: deque[TaskRelation] = deque(maxlen=self._max_task_relations)
+        self._workers: OrderedDict[str, Worker] = OrderedDict()
+        self._worker_events: deque[WorkerEvent] = deque(maxlen=self._max_worker_events)
+        self._schedules: OrderedDict[str, Schedule] = OrderedDict()
 
     def initialize(self) -> None:
         """Mark the controller as initialized."""
@@ -113,6 +141,8 @@ class MemoryController(BaseDBController):
             task = Task(task_id=event.task_id, name=event.name, state=event.state)
             self._tasks[event.task_id] = task
         self._apply_task_event(task, event)
+        self._touch_task(event.task_id)
+        self._enforce_task_limit()
 
     def get_tasks(self, filters: TaskFilter | None = None) -> list[Task]:
         """Return tasks optionally filtered by criteria."""
@@ -191,6 +221,8 @@ class MemoryController(BaseDBController):
                 worker.queues = names or None
         if event.broker_url:
             worker.broker_url = event.broker_url
+        self._touch_worker(event.hostname)
+        self._enforce_worker_limit()
 
     def get_workers(self) -> list[Worker]:
         """Return all workers."""
@@ -257,6 +289,8 @@ class MemoryController(BaseDBController):
     def store_schedule(self, schedule: Schedule) -> None:
         """Persist a schedule entry."""
         self._schedules[schedule.schedule_id] = schedule
+        self._touch_schedule(schedule.schedule_id)
+        self._enforce_schedule_limit()
 
     def delete_schedule(self, schedule_id: str) -> None:
         """Delete a schedule entry."""
@@ -267,30 +301,116 @@ class MemoryController(BaseDBController):
         cutoff = _coerce_dt(datetime.now(UTC) - timedelta(days=older_than_days))
         removed = 0
         before_events = len(self._task_events)
-        self._task_events = [event for event in self._task_events if _coerce_dt(event.timestamp) >= cutoff]
+        self._task_events = _bounded_deque(
+            [event for event in self._task_events if _coerce_dt(event.timestamp) >= cutoff],
+            self._max_task_events,
+        )
         removed += before_events - len(self._task_events)
         before_workers = len(self._worker_events)
-        self._worker_events = [event for event in self._worker_events if _coerce_dt(event.timestamp) >= cutoff]
+        self._worker_events = _bounded_deque(
+            [event for event in self._worker_events if _coerce_dt(event.timestamp) >= cutoff],
+            self._max_worker_events,
+        )
         removed += before_workers - len(self._worker_events)
         tasks_before = len(self._tasks)
-        self._tasks = {
-            task_id: task
-            for task_id, task in self._tasks.items()
-            if (ts := _task_timestamp(task)) is None or _coerce_dt(ts) >= cutoff
-        }
+        self._tasks = OrderedDict(
+            (
+                (task_id, task)
+                for task_id, task in self._tasks.items()
+                if (ts := _task_timestamp(task)) is None or _coerce_dt(ts) >= cutoff
+            ),
+        )
         removed += tasks_before - len(self._tasks)
+        if self._task_relations:
+            valid_ids = set(self._tasks.keys())
+            self._task_relations = _bounded_deque(
+                [
+                    relation
+                    for relation in self._task_relations
+                    if relation.root_id in valid_ids
+                    and relation.child_id in valid_ids
+                    and (relation.parent_id is None or relation.parent_id in valid_ids)
+                ],
+                self._max_task_relations,
+            )
         workers_before = len(self._workers)
-        self._workers = {
-            hostname: worker
-            for hostname, worker in self._workers.items()
-            if worker.last_heartbeat is None or _coerce_dt(worker.last_heartbeat) >= cutoff
-        }
+        self._workers = OrderedDict(
+            (
+                (hostname, worker)
+                for hostname, worker in self._workers.items()
+                if worker.last_heartbeat is None or _coerce_dt(worker.last_heartbeat) >= cutoff
+            ),
+        )
         removed += workers_before - len(self._workers)
+        removed += self._enforce_task_limit()
+        removed += self._enforce_worker_limit()
+        removed += self._enforce_schedule_limit()
         return removed
 
     def close(self) -> None:
         """Close resources (noop for memory)."""
         return
+
+    def _touch_task(self, task_id: str) -> None:
+        if task_id in self._tasks:
+            self._tasks.move_to_end(task_id)
+
+    def _touch_worker(self, hostname: str) -> None:
+        if hostname in self._workers:
+            self._workers.move_to_end(hostname)
+
+    def _touch_schedule(self, schedule_id: str) -> None:
+        if schedule_id in self._schedules:
+            self._schedules.move_to_end(schedule_id)
+
+    def _enforce_task_limit(self) -> int:
+        if self._max_tasks is None:
+            return 0
+        removed = 0
+        while len(self._tasks) > self._max_tasks:
+            task_id, _ = self._tasks.popitem(last=False)
+            removed += 1
+            self._prune_task_relations(task_id)
+        return removed
+
+    def _enforce_worker_limit(self) -> int:
+        if self._max_workers is None:
+            return 0
+        removed = 0
+        while len(self._workers) > self._max_workers:
+            hostname, _ = self._workers.popitem(last=False)
+            removed += 1
+            self._prune_worker_events(hostname)
+        return removed
+
+    def _enforce_schedule_limit(self) -> int:
+        if self._max_schedules is None:
+            return 0
+        removed = 0
+        while len(self._schedules) > self._max_schedules:
+            self._schedules.popitem(last=False)
+            removed += 1
+        return removed
+
+    def _prune_task_relations(self, task_id: str) -> None:
+        if not self._task_relations:
+            return
+        self._task_relations = _bounded_deque(
+            [
+                relation
+                for relation in self._task_relations
+                if task_id not in (relation.root_id, relation.child_id, relation.parent_id)
+            ],
+            self._max_task_relations,
+        )
+
+    def _prune_worker_events(self, hostname: str) -> None:
+        if not self._worker_events:
+            return
+        self._worker_events = _bounded_deque(
+            [event for event in self._worker_events if event.hostname != hostname],
+            self._max_worker_events,
+        )
 
     @staticmethod
     def _sorted_tasks(tasks: Iterable[Task]) -> list[Task]:
