@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import hashlib
 import secrets
-import stat
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
@@ -24,14 +23,7 @@ MAX_PORT = 65_535
 def _default_rpc_socket_path() -> Path:
     root = Path.cwd().resolve()
     digest = hashlib.sha256(str(root).encode("utf-8")).hexdigest()[:8]
-    candidate = Path(tempfile.gettempdir()) / f"celery_root_{digest}.sock"
-    if candidate.exists():
-        try:
-            if stat.S_ISSOCK(candidate.stat().st_mode):
-                return Path(tempfile.gettempdir()) / f"celery_root_{digest}_{secrets.token_hex(4)}.sock"
-        except OSError:
-            return Path(tempfile.gettempdir()) / f"celery_root_{digest}_{secrets.token_hex(4)}.sock"
-    return candidate
+    return Path(tempfile.gettempdir()) / f"celery_root_{digest}.sock"
 
 
 class LoggingConfigFile(BaseModel):

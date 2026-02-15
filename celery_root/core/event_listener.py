@@ -19,6 +19,7 @@ from typing import TYPE_CHECKING
 from celery import Celery
 from celery.events import EventReceiver
 from kombu.exceptions import OperationalError
+from pydantic import BaseModel
 
 from celery_root.config import set_settings
 from celery_root.core.db.models import TaskEvent, TaskRelation, WorkerEvent
@@ -435,9 +436,15 @@ def _event_received_timestamp(event: dict[str, object]) -> datetime:
     return _event_timestamp(event)
 
 
+def _json_default(value: object) -> object:
+    if isinstance(value, BaseModel):
+        return value.model_dump(mode="json")
+    return str(value)
+
+
 def _json_safe(value: dict[str, object]) -> dict[str, object]:
     try:
-        safe = json.loads(json.dumps(value, default=str))
+        safe = json.loads(json.dumps(value, default=_json_default))
     except (TypeError, ValueError):  # pragma: no cover - defensive
         return {"value": str(value)}
     if isinstance(safe, dict):
@@ -503,10 +510,10 @@ def _stringify(value: object) -> str | None:
         return None
     if isinstance(value, str):
         return value
-    if isinstance(value, dict | list | tuple):
+    if isinstance(value, dict | list | tuple | BaseModel):
         try:
-            return json.dumps(value)
-        except TypeError:
+            return json.dumps(value, default=_json_default)
+        except (TypeError, ValueError):
             return str(value)
     return str(value)
 

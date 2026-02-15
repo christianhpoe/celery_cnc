@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import json
 import logging
 from datetime import UTC, datetime
 from multiprocessing import Queue
@@ -18,6 +19,8 @@ if TYPE_CHECKING:
 
     import pytest
     from celery import Celery
+
+from pydantic import BaseModel
 
 from celery_root.config import CeleryRootConfig, DatabaseConfigSqlite, LoggingConfigFile
 from celery_root.core import event_listener as listener
@@ -196,6 +199,17 @@ def test_select_event_app_and_accept_content(monkeypatch: pytest.MonkeyPatch) ->
     assert app.conf.broker_url == "amqp://new"
     accept = listener._collect_accept_content(apps)
     assert "json" in accept
+
+
+def test_stringify_pydantic_model() -> None:
+    class _Payload(BaseModel):
+        foo: int
+        bar: str
+
+    payload = _Payload(foo=1, bar="x")
+    serialized = listener._stringify({"payload": payload})
+    assert serialized is not None
+    assert json.loads(serialized) == {"payload": {"foo": 1, "bar": "x"}}
 
 
 def test_listener_run_and_listen(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
