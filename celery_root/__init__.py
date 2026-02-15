@@ -19,7 +19,6 @@ from .config import (
     BeatConfig,
     CeleryRootConfig,
     DatabaseConfigBase,
-    DatabaseConfigMemory,
     DatabaseConfigSqlite,
     FrontendConfig,
     LoggingConfigFile,
@@ -30,7 +29,6 @@ from .config import (
     set_settings,
 )
 from .core.db.adapters.base import BaseDBController
-from .core.db.adapters.memory import MemoryController
 from .core.db.adapters.sqlite import SQLiteController
 from .core.process_manager import ProcessManager
 from .core.registry import WorkerRegistry
@@ -104,19 +102,12 @@ class CeleryRoot:
         if isinstance(self._db_controller, SQLiteController):
             path = getattr(self._db_controller, "_path", None)
             resolved = Path(path).expanduser().resolve() if path is not None else None
+            db_path = resolved
             if isinstance(self.config.database, DatabaseConfigSqlite):
-                db_path = resolved or self.config.database.db_path
                 db_config = self.config.database.model_copy(update={"db_path": db_path})
             else:
-                db_path = resolved or Path("./celery_root.db")
                 db_config = DatabaseConfigSqlite(db_path=db_path)
             self.config = self.config.model_copy(update={"database": db_config})
-            return None
-        if isinstance(self._db_controller, MemoryController):
-            if not isinstance(self.config.database, DatabaseConfigMemory):
-                self.config = self.config.model_copy(
-                    update={"database": DatabaseConfigMemory()},
-                )
             return None
         if isinstance(self._db_controller, BaseDBController):
             controller = self._db_controller
@@ -128,20 +119,29 @@ class CeleryRoot:
         if controller is not None:
             if isinstance(controller, SQLiteController):
                 raw_path = getattr(controller, "_path", None)
-                if raw_path is not None:
-                    resolved = Path(raw_path).expanduser().resolve()
+                if raw_path is None:
                     if isinstance(self.config.database, DatabaseConfigSqlite):
-                        db_config = self.config.database.model_copy(update={"db_path": resolved})
+                        db_config = self.config.database.model_copy(update={"db_path": None})
                     else:
-                        db_config = DatabaseConfigSqlite(db_path=resolved)
+                        db_config = DatabaseConfigSqlite(db_path=None)
                     self.config = self.config.model_copy(update={"database": db_config})
+                    return
+                resolved = Path(raw_path).expanduser().resolve()
+                if isinstance(self.config.database, DatabaseConfigSqlite):
+                    db_config = self.config.database.model_copy(update={"db_path": resolved})
+                else:
+                    db_config = DatabaseConfigSqlite(db_path=resolved)
+                self.config = self.config.model_copy(update={"database": db_config})
                 return
             if isinstance(controller, BaseDBController) or callable(controller):
                 return
         if not isinstance(self.config.database, DatabaseConfigSqlite):
             return
 
-        path = Path(self.config.database.db_path).expanduser()
+        db_path = self.config.database.db_path
+        if db_path is None:
+            return
+        path = Path(db_path).expanduser()
         path = (Path.cwd() / path).resolve() if not path.is_absolute() else path.resolve()
         self.config.database.db_path = path
 
@@ -212,7 +212,7 @@ class CeleryRoot:
         return config.model_copy(update={"worker_import_paths": paths})
 
 
-def _make_sqlite_controller(path: Path) -> BaseDBController:
+def _make_sqlite_controller(path: Path | None) -> BaseDBController:
     """Create a SQLite controller; multiprocessing-safe factory."""
     return SQLiteController(path)
 
@@ -291,7 +291,6 @@ __all__ = [
     "CeleryRoot",
     "CeleryRootConfig",
     "DatabaseConfigBase",
-    "DatabaseConfigMemory",
     "DatabaseConfigSqlite",
     "FrontendConfig",
     "LoggingConfigFile",

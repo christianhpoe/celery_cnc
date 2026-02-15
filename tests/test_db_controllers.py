@@ -7,13 +7,14 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 import pytest
+from sqlalchemy import text
 
-from celery_root.core.db.adapters.memory import MemoryController, MemoryLimits
 from celery_root.core.db.adapters.sqlite import SQLiteController
 from celery_root.core.db.models import (
+    BrokerQueueEvent,
     Schedule,
     TaskEvent,
     TaskFilter,
@@ -31,10 +32,7 @@ if TYPE_CHECKING:
 
 @pytest.fixture(params=["memory", "sqlite"])
 def controller(request: pytest.FixtureRequest, tmp_path: Path) -> Generator[BaseDBController]:
-    if request.param == "memory":
-        ctrl: BaseDBController = MemoryController()
-    else:
-        ctrl = SQLiteController(tmp_path / "sqlite3.db")
+    ctrl = SQLiteController() if request.param == "memory" else SQLiteController(tmp_path / "sqlite3.db")
     ctrl.initialize()
     yield ctrl
     ctrl.close()
@@ -144,9 +142,37 @@ def test_workers(controller: BaseDBController) -> None:
     controller.store_worker_event(
         WorkerEvent(hostname="worker1", event="worker-online", timestamp=ts, info={"active": []}),
     )
+    controller.store_worker_event(
+        WorkerEvent(
+            hostname="worker1",
+            event="worker-heartbeat",
+            timestamp=ts + timedelta(seconds=1),
+            info={"active": 3},
+        ),
+    )
     worker = controller.get_worker("worker1")
     assert worker is not None
     assert worker.status == "ONLINE"
+    assert worker.active_tasks == 3
+
+
+def test_broker_queue_events(controller: BaseDBController) -> None:
+    ts = datetime(2024, 1, 3, 9, 0, 0, tzinfo=UTC)
+    controller.store_broker_queue_event(
+        BrokerQueueEvent(
+            broker_url="redis://localhost:6379/0",
+            queue="celery",
+            messages=5,
+            consumers=1,
+            timestamp=ts,
+        ),
+    )
+    sqlite_controller = cast("SQLiteController", controller)
+    with sqlite_controller._engine.begin() as conn:
+        count = conn.execute(text("select count(*) from broker_queue_events")).scalar_one()
+    assert int(count or 0) == 1
+    snapshot = controller.get_broker_queue_snapshot("redis://localhost:6379/0")
+    assert len(snapshot) == 1
 
 
 def test_schedules(controller: BaseDBController) -> None:
@@ -203,14 +229,14 @@ def test_cleanup(controller: BaseDBController) -> None:
     assert removed >= 1
 
 
-def test_memory_limits_evict_old_tasks() -> None:
-    controller = MemoryController(limits=MemoryLimits(max_tasks=2))
+def test_in_memory_controller_is_ephemeral() -> None:
+    controller = SQLiteController()
     controller.initialize()
-    base = datetime(2024, 1, 6, 0, 0, 0, tzinfo=UTC)
-    controller.store_task_event(_task_event("t1", "SUCCESS", base))
-    controller.store_task_event(_task_event("t2", "SUCCESS", base + timedelta(seconds=1)))
-    controller.store_task_event(_task_event("t3", "SUCCESS", base + timedelta(seconds=2)))
+    ts = datetime(2024, 1, 6, 0, 0, 0, tzinfo=UTC)
+    controller.store_task_event(_task_event("t1", "SUCCESS", ts))
+    controller.close()
 
-    assert controller.get_task("t1") is None
-    assert controller.get_task("t2") is not None
-    assert controller.get_task("t3") is not None
+    fresh = SQLiteController()
+    fresh.initialize()
+    assert fresh.get_task("t1") is None
+    fresh.close()

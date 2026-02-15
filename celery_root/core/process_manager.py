@@ -14,6 +14,7 @@ import threading
 import time
 from contextlib import suppress
 from multiprocessing import Event, Process, Queue
+from pathlib import Path
 from queue import Empty
 from typing import TYPE_CHECKING
 
@@ -27,6 +28,7 @@ from celery_root.core.db.manager import DBManager
 from celery_root.core.logging.setup import configure_process_logging
 
 from .event_listener import EventListener
+from .reconciler import Reconciler
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -39,6 +41,8 @@ if TYPE_CHECKING:
 
 _MONITOR_INTERVAL = 1.0
 _HEARTBEAT_INTERVAL = 60.0
+_DB_READY_TIMEOUT = 10.0
+_DB_READY_POLL = 0.05
 
 
 def _metrics_url(config: CeleryRootConfig) -> str:
@@ -73,6 +77,8 @@ class _WebServerProcess(Process):
         configure_process_logging(self._root_config, component="web")
         logger = logging.getLogger(__name__)
         logger.info("Web server starting on %s:%s", self._host, self._port)
+        logger.info("Web server DB RPC socket path: %s", self._root_config.database.rpc_socket_path)
+        logger.info("Web server DB RPC auth enabled: %s", bool(self._root_config.database.rpc_auth_key))
 
         def _heartbeat() -> None:
             while True:
@@ -178,6 +184,8 @@ class _McpServerProcess(Process):
         configure_process_logging(self._config, component="mcp")
         logger = logging.getLogger(__name__)
         logger.info("MCP server starting on %s:%s", self._host, self._port)
+        logger.info("MCP server DB RPC socket path: %s", self._config.database.rpc_socket_path)
+        logger.info("MCP server DB RPC auth enabled: %s", bool(self._config.database.rpc_auth_key))
         app = create_asgi_app()
         server_config = UvicornConfig(
             app=app,
@@ -221,7 +229,16 @@ class ProcessManager:
         """Start all configured subprocesses."""
         self._build_processes()
         self._logger.info("ProcessManager launching %d subprocesses.", len(self._process_factories))
+        db_factory = self._process_factories.get("db_manager")
+        if db_factory is not None:
+            self._logger.info("Starting process db_manager.")
+            db_process = db_factory()
+            self._processes["db_manager"] = db_process
+            db_process.start()
+            self._wait_for_db_socket(db_process)
         for name, factory in self._process_factories.items():
+            if name == "db_manager":
+                continue
             self._logger.info("Starting process %s.", name)
             self._processes[name] = factory()
             self._processes[name].start()
@@ -232,6 +249,8 @@ class ProcessManager:
         set_settings(self._config)
         configure_process_logging(self._config, component="process_manager")
         self._logger.info("ProcessManager starting.")
+        self._logger.info("DB RPC socket path: %s", self._config.database.rpc_socket_path)
+        self._logger.info("DB RPC auth enabled: %s", bool(self._config.database.rpc_auth_key))
         self.start()
         last_heartbeat = time.monotonic()
         try:
@@ -262,6 +281,9 @@ class ProcessManager:
             if process.is_alive():
                 self._logger.warning("Process %s still running; terminating.", process.name)
                 process.terminate()
+                process.join(timeout=5)
+                if process.is_alive():
+                    self._logger.warning("Process %s still running after terminate.", process.name)
         self._write_statuses()
 
     def _build_processes(self) -> None:
@@ -322,6 +344,10 @@ class ProcessManager:
                 self._config,
                 metrics_queues=tuple(metrics_queues),
             )
+        self._process_factories["reconciler"] = functools.partial(
+            Reconciler,
+            self._config,
+        )
         if self._config.frontend is not None:
             self._process_factories["web"] = functools.partial(
                 _WebServerProcess,
@@ -355,3 +381,20 @@ class ProcessManager:
     def _write_statuses(self) -> None:
         statuses = build_statuses(self._processes)
         self._status_store.write(statuses)
+
+    def _wait_for_db_socket(self, process: Process) -> None:
+        address = self._config.database.rpc_address()
+        socket_path = Path(address)
+        deadline = time.monotonic() + _DB_READY_TIMEOUT
+        while time.monotonic() < deadline:
+            if socket_path.exists():
+                return
+            if not process.is_alive():
+                self._logger.warning("DBManager stopped before socket was ready.")
+                return
+            time.sleep(_DB_READY_POLL)
+        self._logger.warning(
+            "DBManager socket did not appear within %.1fs (%s).",
+            _DB_READY_TIMEOUT,
+            socket_path,
+        )

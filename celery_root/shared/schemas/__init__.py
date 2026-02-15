@@ -7,6 +7,7 @@
 """Shared schemas for Celery Root components."""
 
 from .domain import (
+    BrokerQueueEvent,
     Schedule,
     Task,
     TaskEvent,
@@ -21,8 +22,12 @@ from .domain import (
 )
 from .rpc import (
     RPC_SCHEMA_VERSION,
+    BrokerQueueSnapshotRequest,
+    BrokerQueueSnapshotResponse,
     CleanupRequest,
     CleanupResponse,
+    DbInfoRequest,
+    DbInfoResponse,
     DeleteScheduleRequest,
     GetTaskRequest,
     GetTaskResponse,
@@ -30,6 +35,7 @@ from .rpc import (
     GetWorkerResponse,
     HeatmapRequest,
     HeatmapResponse,
+    IngestBrokerQueueEventRequest,
     IngestTaskEventRequest,
     IngestWorkerEventRequest,
     ListSchedulesRequest,
@@ -47,6 +53,8 @@ from .rpc import (
     Ok,
     PingRequest,
     PingResponse,
+    RawQueryRequest,
+    RawQueryResponse,
     RpcError,
     RpcRequestEnvelope,
     RpcResponseEnvelope,
@@ -65,12 +73,19 @@ from .rpc import (
     TaskStatsResponse,
     ThroughputRequest,
     ThroughputResponse,
+    WorkerEventSnapshotRequest,
+    WorkerEventSnapshotResponse,
 )
 
 __all__ = [
     "RPC_SCHEMA_VERSION",
+    "BrokerQueueEvent",
+    "BrokerQueueSnapshotRequest",
+    "BrokerQueueSnapshotResponse",
     "CleanupRequest",
     "CleanupResponse",
+    "DbInfoRequest",
+    "DbInfoResponse",
     "DeleteScheduleRequest",
     "GetTaskRequest",
     "GetTaskResponse",
@@ -78,6 +93,7 @@ __all__ = [
     "GetWorkerResponse",
     "HeatmapRequest",
     "HeatmapResponse",
+    "IngestBrokerQueueEventRequest",
     "IngestTaskEventRequest",
     "IngestWorkerEventRequest",
     "ListSchedulesRequest",
@@ -95,6 +111,8 @@ __all__ = [
     "Ok",
     "PingRequest",
     "PingResponse",
+    "RawQueryRequest",
+    "RawQueryResponse",
     "RpcError",
     "RpcRequestEnvelope",
     "RpcResponseEnvelope",
@@ -123,5 +141,7 @@ __all__ = [
     "TimeRange",
     "Worker",
     "WorkerEvent",
+    "WorkerEventSnapshotRequest",
+    "WorkerEventSnapshotResponse",
     "WorkerStats",
 ]
