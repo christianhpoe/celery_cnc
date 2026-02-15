@@ -116,6 +116,7 @@
       file: panel.querySelector("[data-log-file]"),
       output: panel.querySelector("[data-log-output]"),
       empty: panel.querySelector("[data-log-empty]"),
+      autoRefresh: panel.querySelector("[data-log-autorefresh]"),
     };
 
     if (elements.output && !elements.output.classList.contains("is-hidden")) {
@@ -127,6 +128,26 @@
     }
 
     let inFlight = false;
+    let timerId = null;
+
+    function startAutoRefresh() {
+      if (timerId !== null) {
+        return;
+      }
+      timerId = window.setInterval(refreshLogs, REFRESH_INTERVAL_MS);
+    }
+
+    function stopAutoRefresh() {
+      if (timerId === null) {
+        return;
+      }
+      window.clearInterval(timerId);
+      timerId = null;
+    }
+
+    function isAutoRefreshEnabled() {
+      return !elements.autoRefresh || elements.autoRefresh.checked;
+    }
 
     async function refreshLogs() {
       if (inFlight) {
@@ -154,10 +175,25 @@
     }
 
     refreshLogs();
-    const timerId = window.setInterval(refreshLogs, REFRESH_INTERVAL_MS);
+    if (elements.autoRefresh) {
+      elements.autoRefresh.addEventListener("change", () => {
+        if (elements.autoRefresh.checked) {
+          refreshLogs();
+          startAutoRefresh();
+        } else {
+          stopAutoRefresh();
+        }
+      });
+    }
+    if (isAutoRefreshEnabled()) {
+      startAutoRefresh();
+    }
     window.CeleryLogs = {
       stop() {
-        window.clearInterval(timerId);
+        stopAutoRefresh();
+        if (elements.autoRefresh) {
+          elements.autoRefresh.checked = false;
+        }
       },
     };
   }

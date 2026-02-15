@@ -1451,6 +1451,13 @@ body {
   font-size: 0.85rem;
 }
 
+.filter-panel .form-toggle label {
+  font-size: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  color: inherit;
+}
+
 .filter-panel .form-toggle input[type="checkbox"] {
   width: 16px;
   height: 16px;

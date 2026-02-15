@@ -36,6 +36,27 @@ SPDX-License-Identifier: BSD-3-Clause
         <label for="log-lines">Lines</label>
         <input id="log-lines" name="lines" type="number" min="1" max="5000" value="{{ lines }}" />
       </div>
+      <div>
+        <label for="log-severity">Severity</label>
+        <select id="log-severity" name="severity">
+          <option value="">Any</option>
+          {% for value, label in severity_options %}
+            <option value="{{ value }}" {% if value == selected_severity %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="form-toggle">
+        <label>
+          <input
+            id="log-auto-refresh"
+            type="checkbox"
+            checked
+            data-log-autorefresh
+            data-auto-submit="false"
+          />
+          Enable auto refresh
+        </label>
+      </div>
       <div class="filter-actions">
         <button class="btn accent" type="submit">Refresh logs</button>
       </div>

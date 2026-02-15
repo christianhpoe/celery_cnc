@@ -12,27 +12,23 @@ import functools
 import logging
 import threading
 import time
+from collections.abc import Callable
 from contextlib import suppress
 from multiprocessing import Event, Process, Queue
 from pathlib import Path
 from queue import Empty
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Protocol, cast
 
-from uvicorn import Config as UvicornConfig
-from uvicorn import Server as UvicornServer
-
-from celery_root.components.mcp.server import create_asgi_app
 from celery_root.config import set_settings
 from celery_root.core.component_status import ComponentStatusStore, build_statuses
 from celery_root.core.db.manager import DBManager
 from celery_root.core.logging.setup import configure_process_logging
+from celery_root.optional import require_optional_scope
 
 from .event_listener import EventListener
 from .reconciler import Reconciler
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
-
     from celery_root.components.metrics.base import BaseMonitoringExporter
     from celery_root.config import CeleryRootConfig
     from celery_root.core.db.adapters.base import BaseDBController
@@ -43,6 +39,40 @@ _MONITOR_INTERVAL = 1.0
 _HEARTBEAT_INTERVAL = 60.0
 _DB_READY_TIMEOUT = 10.0
 _DB_READY_POLL = 0.05
+
+
+class _UvicornConfigInstance(Protocol):
+    """Protocol for uvicorn Config instances."""
+
+
+class _UvicornConfigType(Protocol):
+    def __call__(  # noqa: PLR0913
+        self,
+        *,
+        app: object,
+        host: str,
+        port: int,
+        log_level: str,
+        access_log: bool,
+        ws: str,
+    ) -> _UvicornConfigInstance: ...
+
+
+class _UvicornServerInstance(Protocol):
+    should_exit: bool
+
+    def run(self) -> None: ...
+
+
+class _UvicornServerType(Protocol):
+    def __call__(self, *, config: _UvicornConfigInstance) -> _UvicornServerInstance: ...
+
+
+type McpDependencies = tuple[_UvicornConfigType, _UvicornServerType, Callable[[], object]]
+
+UvicornConfig: _UvicornConfigType | None = None
+UvicornServer: _UvicornServerType | None = None
+create_asgi_app: Callable[[], object] | None = None
 
 
 def _metrics_url(config: CeleryRootConfig) -> str:
@@ -56,6 +86,23 @@ def _metrics_url(config: CeleryRootConfig) -> str:
     path = "/metrics" if prometheus is None else prometheus.prometheus_path
     port = 8001 if prometheus is None else prometheus.port
     return f"http://{host}:{port}{path}"
+
+
+def _load_mcp_dependencies() -> McpDependencies:
+    from uvicorn import Config as _UvicornConfig  # noqa: PLC0415
+    from uvicorn import Server as _UvicornServer  # noqa: PLC0415
+
+    from celery_root.components.mcp.server import create_asgi_app as _create_asgi_app  # noqa: PLC0415
+
+    config_type: _UvicornConfigType = (
+        cast("_UvicornConfigType", _UvicornConfig) if UvicornConfig is None else UvicornConfig
+    )
+    server_type: _UvicornServerType = (
+        cast("_UvicornServerType", _UvicornServer) if UvicornServer is None else UvicornServer
+    )
+    app_factory: Callable[[], object] = _create_asgi_app if create_asgi_app is None else create_asgi_app
+
+    return (config_type, server_type, app_factory)
 
 
 class _WebServerProcess(Process):
@@ -86,6 +133,7 @@ class _WebServerProcess(Process):
                 time.sleep(_HEARTBEAT_INTERVAL)
 
         threading.Thread(target=_heartbeat, daemon=True).start()
+        require_optional_scope("web")
         from celery_root.components.web import devserver  # noqa: PLC0415
 
         devserver.serve(self._host, self._port, shutdown_event=self._stop_event)
@@ -186,8 +234,10 @@ class _McpServerProcess(Process):
         logger.info("MCP server starting on %s:%s", self._host, self._port)
         logger.info("MCP server DB RPC socket path: %s", self._config.database.rpc_socket_path)
         logger.info("MCP server DB RPC auth enabled: %s", bool(self._config.database.rpc_auth_key))
-        app = create_asgi_app()
-        server_config = UvicornConfig(
+        require_optional_scope("mcp")
+        uvicorn_config, uvicorn_server, create_app = _load_mcp_dependencies()
+        app = create_app()
+        server_config = uvicorn_config(
             app=app,
             host=self._host,
             port=self._port,
@@ -195,7 +245,7 @@ class _McpServerProcess(Process):
             access_log=False,
             ws="websockets-sansio",
         )
-        server = UvicornServer(config=server_config)
+        server = uvicorn_server(config=server_config)
 
         def _watch_stop() -> None:
             self._stop_event.wait()
@@ -300,6 +350,7 @@ class ProcessManager:
             backends = {str(app.conf.result_backend) if app.conf.result_backend else "" for app in group.apps}
             backend_map[broker_url] = next(iter(backends)) if len(backends) == 1 else "multiple"
         if self._config.prometheus is not None:
+            require_optional_scope("prometheus")
             from celery_root.components.metrics.prometheus import PrometheusExporter  # noqa: PLC0415
 
             metrics_url = _metrics_url(self._config)
@@ -319,6 +370,7 @@ class ProcessManager:
                 prometheus_queue,
             )
         if self._config.open_telemetry is not None:
+            require_optional_scope("otel")
             from celery_root.components.metrics.opentelemetry import OTelExporter  # noqa: PLC0415
 
             otel_queue: Queue[object] = Queue(self._config.event_queue_maxsize)
@@ -349,6 +401,7 @@ class ProcessManager:
             self._config,
         )
         if self._config.frontend is not None:
+            require_optional_scope("web")
             self._process_factories["web"] = functools.partial(
                 _WebServerProcess,
                 self._config.frontend.host,
@@ -356,6 +409,7 @@ class ProcessManager:
                 self._config,
             )
         if self._config.mcp is not None:
+            require_optional_scope("mcp")
             self._process_factories["mcp"] = functools.partial(
                 _McpServerProcess,
                 self._config.mcp.host,
