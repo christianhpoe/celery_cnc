@@ -32,6 +32,7 @@ from sqlalchemy import (
     text,
 )
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
+from sqlalchemy.pool import StaticPool
 
 from celery_root.core.db.adapters.base import BaseDBController
 from celery_root.core.db.models import (
@@ -139,15 +140,28 @@ class SQLiteController(BaseDBController):
 
     _SCHEMA_VERSION = 4
 
-    def __init__(self, path: str | Path = "celery_root.db") -> None:
-        """Initialize the SQLite controller with a database path."""
-        self._path = Path(path).expanduser().resolve()
-        self._ensure_writable_path()
-        self._engine: Engine = create_engine(
-            f"sqlite:///{self._path}",
-            future=True,
-            connect_args={"timeout": _SQLITE_BUSY_TIMEOUT_MS / 1000},
-        )
+    def __init__(self, path: str | Path | None = None) -> None:
+        """Initialize the SQLite controller with a database path or in-memory storage."""
+        self._path: Path | None = None
+        self._engine: Engine
+        if path is None:
+            self._engine = create_engine(
+                "sqlite+pysqlite:///:memory:",
+                future=True,
+                connect_args={
+                    "timeout": _SQLITE_BUSY_TIMEOUT_MS / 1000,
+                    "check_same_thread": False,
+                },
+                poolclass=StaticPool,
+            )
+        else:
+            self._path = Path(path).expanduser().resolve()
+            self._ensure_writable_path()
+            self._engine = create_engine(
+                f"sqlite:///{self._path}",
+                future=True,
+                connect_args={"timeout": _SQLITE_BUSY_TIMEOUT_MS / 1000},
+            )
         event.listen(self._engine, "connect", _configure_sqlite)
         self._metadata = MetaData()
         self._define_tables()
@@ -431,6 +445,8 @@ class SQLiteController(BaseDBController):
         self._engine.dispose()
 
     def _ensure_writable_path(self) -> None:
+        if self._path is None:
+            return
         if self._path.exists():
             if self._path.is_dir():
                 msg = f"SQLite database path points to a directory: {self._path}"

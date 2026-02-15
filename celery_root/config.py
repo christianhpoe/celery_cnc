@@ -79,9 +79,9 @@ class DatabaseConfigBase(BaseModel):
 
 
 class DatabaseConfigSqlite(DatabaseConfigBase):
-    """SQLite database configuration."""
+    """SQLite database configuration (in-memory when db_path is None)."""
 
-    db_path: Path = Path("./celery_root.db")
+    db_path: Path | None = None
     retention_days: int = Field(default=7, gt=0)
     batch_size: int = Field(default=500, gt=0)
     flush_interval: float = Field(default=1.0, gt=0)
@@ -89,24 +89,16 @@ class DatabaseConfigSqlite(DatabaseConfigBase):
 
     @field_validator("db_path", mode="after")
     @classmethod
-    def _expand_db_path(cls, value: Path) -> Path:
+    def _expand_db_path(cls, value: Path | None) -> Path | None:
+        if value is None:
+            return None
         return value.expanduser()
 
     @model_validator(mode="after")
     def _ensure_db_parent(self) -> DatabaseConfigSqlite:
-        self.db_path.parent.mkdir(parents=True, exist_ok=True)
+        if self.db_path is not None:
+            self.db_path.parent.mkdir(parents=True, exist_ok=True)
         return self
-
-
-class DatabaseConfigMemory(DatabaseConfigBase):
-    """In-memory database configuration."""
-
-    max_tasks: int = Field(default=100_000, ge=0)
-    max_task_events: int = Field(default=500_000, ge=0)
-    max_task_relations: int = Field(default=500_000, ge=0)
-    max_workers: int = Field(default=1_000, ge=0)
-    max_worker_events: int = Field(default=50_000, ge=0)
-    max_schedules: int = Field(default=1_000, ge=0)
 
 
 class BeatConfig(BaseModel):
@@ -213,7 +205,7 @@ class CeleryRootConfig(BaseModel):
     model_config = ConfigDict(validate_assignment=True, extra="ignore")
 
     logging: LoggingConfigFile = Field(default_factory=LoggingConfigFile)
-    database: DatabaseConfigSqlite | DatabaseConfigMemory = Field(default_factory=DatabaseConfigMemory)
+    database: DatabaseConfigSqlite = Field(default_factory=DatabaseConfigSqlite)
     beat: BeatConfig | None = None
     prometheus: PrometheusConfig | None = None
     open_telemetry: OpenTelemetryConfig | None = None
@@ -227,19 +219,9 @@ class CeleryRootConfig(BaseModel):
     @field_validator("database", mode="before")
     @classmethod
     def _coerce_database(cls, value: object) -> object:
-        if isinstance(value, DatabaseConfigSqlite | DatabaseConfigMemory):
+        if isinstance(value, DatabaseConfigSqlite):
             return value
         if isinstance(value, dict):
-            memory_keys = {
-                "max_tasks",
-                "max_task_events",
-                "max_task_relations",
-                "max_workers",
-                "max_worker_events",
-                "max_schedules",
-            }
-            if memory_keys.intersection(value.keys()):
-                return DatabaseConfigMemory(**value)
             return DatabaseConfigSqlite(**value)
         return value
 
@@ -278,7 +260,6 @@ __all__ = [
     "BeatConfig",
     "CeleryRootConfig",
     "DatabaseConfigBase",
-    "DatabaseConfigMemory",
     "DatabaseConfigSqlite",
     "FrontendConfig",
     "LoggingConfigFile",

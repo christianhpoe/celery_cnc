@@ -23,8 +23,7 @@ from typing import TYPE_CHECKING, Any
 
 from pydantic import ValidationError
 
-from celery_root.config import DatabaseConfigMemory, DatabaseConfigSqlite, set_settings
-from celery_root.core.db.adapters.memory import MemoryController, MemoryLimits
+from celery_root.config import DatabaseConfigSqlite, set_settings
 from celery_root.core.db.adapters.sqlite import SQLiteController
 from celery_root.core.db.dispatch import RPC_OPERATIONS
 from celery_root.core.logging.setup import configure_process_logging
@@ -86,17 +85,6 @@ def _build_backend(
     if controller_factory is not None:
         return controller_factory()
     db_config = config.database
-    if isinstance(db_config, DatabaseConfigMemory):
-        return MemoryController(
-            limits=MemoryLimits(
-                max_tasks=db_config.max_tasks,
-                max_task_events=db_config.max_task_events,
-                max_task_relations=db_config.max_task_relations,
-                max_workers=db_config.max_workers,
-                max_worker_events=db_config.max_worker_events,
-                max_schedules=db_config.max_schedules,
-            ),
-        )
     if isinstance(db_config, DatabaseConfigSqlite):
         return SQLiteController(db_config.db_path)
     msg = f"Unsupported database config: {type(db_config).__name__}"

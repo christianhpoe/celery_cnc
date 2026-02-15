@@ -90,7 +90,7 @@ def app_name(app: Celery) -> str:
 def db_path() -> Path:
     """Return the configured database path for the Root store."""
     raw_path = getattr(settings, "CELERY_ROOT_DB_PATH", None)
-    return Path(raw_path) if raw_path is not None else Path("celery_root.db")
+    return Path(raw_path) if raw_path is not None else Path("memory")
 
 
 def retention_days() -> int:

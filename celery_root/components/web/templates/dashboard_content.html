@@ -47,7 +47,6 @@ SPDX-License-Identifier: BSD-3-Clause
           <th>Hostname</th>
           <th>Status</th>
           <th>Active</th>
-          <th>Processes</th>
           <th>Processed</th>
           {% for state in worker_state_columns %}
             <th>{{ state }}</th>
@@ -73,9 +72,6 @@ SPDX-License-Identifier: BSD-3-Clause
               >
                 {{ worker.active }}
               </a>
-            </td>
-            <td>
-              {{ worker.pool_size|default:"—" }}
             </td>
             <td>
               <a
