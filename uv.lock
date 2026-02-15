@@ -148,20 +148,31 @@ tblib = [
 
 [[package]]
 name = "celery-root"
-version = "0.2.0"
+version = "0.3.0"
 source = { editable = "." }
 dependencies = [
     { name = "celery", extra = ["tblib"] },
     { name = "click" },
-    { name = "django" },
-    { name = "fastmcp" },
-    { name = "opentelemetry-exporter-otlp" },
-    { name = "opentelemetry-sdk" },
-    { name = "prometheus-client" },
     { name = "pydantic" },
     { name = "pydantic-settings" },
     { name = "sqlalchemy" },
+]
+
+[package.optional-dependencies]
+mcp = [
+    { name = "django" },
+    { name = "fastmcp" },
     { name = "uvicorn" },
+]
+otel = [
+    { name = "opentelemetry-exporter-otlp" },
+    { name = "opentelemetry-sdk" },
+]
+prometheus = [
+    { name = "prometheus-client" },
+]
+web = [
+    { name = "django" },
 ]
 
 [package.dev-dependencies]
@@ -169,46 +180,60 @@ dev = [
     { name = "celery", extra = ["redis", "sqlalchemy"] },
     { name = "celery-types" },
     { name = "coverage" },
+    { name = "django" },
     { name = "django-stubs" },
+    { name = "fastmcp" },
     { name = "mypy" },
+    { name = "opentelemetry-exporter-otlp" },
+    { name = "opentelemetry-sdk" },
     { name = "pre-commit" },
+    { name = "prometheus-client" },
     { name = "psycopg2-binary" },
     { name = "pytest" },
     { name = "pytest-asyncio" },
     { name = "pytest-cov" },
     { name = "reuse" },
     { name = "sqlalchemy" },
+    { name = "uvicorn" },
 ]
 
 [package.metadata]
 requires-dist = [
     { name = "celery", extras = ["tblib"], specifier = ">=5.0.5,<6" },
     { name = "click", specifier = ">=8.1" },
-    { name = "django", specifier = ">=4,<7" },
-    { name = "fastmcp", specifier = ">=2.12,<3" },
-    { name = "opentelemetry-exporter-otlp", specifier = ">=1.33,<2" },
-    { name = "opentelemetry-sdk", specifier = ">=1.30,<2" },
-    { name = "prometheus-client", specifier = ">=0.13.0,<1" },
+    { name = "django", marker = "extra == 'mcp'", specifier = ">=4,<7" },
+    { name = "django", marker = "extra == 'web'", specifier = ">=4,<7" },
+    { name = "fastmcp", marker = "extra == 'mcp'", specifier = ">=2.12,<3" },
+    { name = "opentelemetry-exporter-otlp", marker = "extra == 'otel'", specifier = ">=1.33,<2" },
+    { name = "opentelemetry-sdk", marker = "extra == 'otel'", specifier = ">=1.30,<2" },
+    { name = "prometheus-client", marker = "extra == 'prometheus'", specifier = ">=0.13.0,<1" },
     { name = "pydantic", specifier = ">=2.12" },
     { name = "pydantic-settings", specifier = ">=2.5,<3" },
     { name = "sqlalchemy", specifier = ">=2,<3" },
-    { name = "uvicorn", specifier = ">=0.35.0,<1" },
+    { name = "uvicorn", marker = "extra == 'mcp'", specifier = ">=0.35.0,<1" },
 ]
+provides-extras = ["web", "otel", "prometheus", "mcp"]
 
 [package.metadata.requires-dev]
 dev = [
     { name = "celery", extras = ["librabbitmq", "redis", "sqlalchemy"] },
     { name = "celery-types" },
     { name = "coverage", specifier = ">=7.13.4" },
+    { name = "django", specifier = ">=4,<7" },
     { name = "django-stubs" },
+    { name = "fastmcp", specifier = ">=2.12,<3" },
     { name = "mypy" },
+    { name = "opentelemetry-exporter-otlp", specifier = ">=1.33,<2" },
+    { name = "opentelemetry-sdk", specifier = ">=1.30,<2" },
     { name = "pre-commit" },
+    { name = "prometheus-client", specifier = ">=0.13.0,<1" },
     { name = "psycopg2-binary" },
     { name = "pytest" },
     { name = "pytest-asyncio" },
     { name = "pytest-cov" },
     { name = "reuse" },
     { name = "sqlalchemy" },
+    { name = "uvicorn", specifier = ">=0.35.0,<1" },
 ]
 
 [[package]]

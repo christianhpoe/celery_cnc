@@ -46,6 +46,8 @@ SPDX-License-Identifier: BSD-3-Clause
         <tr>
           <th>Hostname</th>
           <th>Status</th>
+          <th>Active</th>
+          <th>Processed</th>
           {% for state in worker_state_columns %}
             <th>{{ state }}</th>
           {% endfor %}
@@ -62,6 +64,22 @@ SPDX-License-Identifier: BSD-3-Clause
             </td>
             <td>
               <span class="badge {{ worker.badge }}">{{ worker.status }}</span>
+            </td>
+            <td>
+              <a
+                class="table-link"
+                href="{% url 'tasks' %}?worker={{ worker.hostname|urlencode }}&state=STARTED"
+              >
+                {{ worker.active }}
+              </a>
+            </td>
+            <td>
+              <a
+                class="table-link"
+                href="{% url 'tasks' %}?worker={{ worker.hostname|urlencode }}&state=SUCCESS,FAILURE,REVOKED"
+              >
+                {{ worker.processed }}
+              </a>
             </td>
             {% for cell in worker.state_cells %}
               <td>

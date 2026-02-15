@@ -12,16 +12,15 @@ import os
 from collections.abc import Awaitable, Callable
 from typing import TYPE_CHECKING, cast
 
-import django
-from fastmcp import FastMCP
-from fastmcp.server.auth.providers.jwt import StaticTokenVerifier
-
-from celery_root.components.web.views import dashboard as dashboard_views
 from celery_root.config import McpConfig, get_settings
 from celery_root.core.db.rpc_client import DbRpcClient
+from celery_root.optional import require_optional_scope
 
 if TYPE_CHECKING:
     from collections.abc import MutableMapping
+
+    from fastmcp import FastMCP
+    from fastmcp.server.auth.providers.jwt import StaticTokenVerifier
 
     from celery_root.shared.schemas.domain import Task
 
@@ -46,9 +45,11 @@ def _normalize_path(path: str) -> str:
 
 
 def _ensure_django() -> None:
+    require_optional_scope("mcp")
     if os.environ.get("DJANGO_SETTINGS_MODULE"):
         return
     os.environ.setdefault("DJANGO_SETTINGS_MODULE", "celery_root.components.web.settings")
+    import django  # noqa: PLC0415
 
     django.setup()
 
@@ -91,6 +92,8 @@ def _normalize_mcp_path(app: ASGIApp, base_path: str) -> ASGIApp:
 def _build_auth(config: McpConfig) -> StaticTokenVerifier | None:
     if not config.auth_key:
         return None
+    from fastmcp.server.auth.providers.jwt import StaticTokenVerifier  # noqa: PLC0415
+
     return StaticTokenVerifier(tokens={config.auth_key: {"client_id": "celery_root_mcp"}})
 
 
@@ -154,6 +157,9 @@ def create_mcp_server() -> FastMCP:
     if mcp_config is None:
         msg = "MCP is disabled in the current configuration."
         raise RuntimeError(msg)
+    require_optional_scope("mcp")
+    from fastmcp import FastMCP  # noqa: PLC0415
+
     if not mcp_config.auth_key:
         msg = "CELERY_ROOT_MCP_AUTH_KEY must be set when MCP is enabled."
         raise RuntimeError(msg)
@@ -166,10 +172,30 @@ def create_mcp_server() -> FastMCP:
             schema = db.get_schema()
         return cast("dict[str, object]", schema.model_dump(mode="json"))
 
+    @mcp.tool(name="db_info")
+    def db_info() -> dict[str, object]:
+        """Return database backend metadata."""
+        with DbRpcClient.from_config(config, client_name="mcp") as db:
+            info = db.get_db_info()
+        return cast("dict[str, object]", info.model_dump(mode="json"))
+
+    @mcp.tool(name="db_query")
+    def db_query(
+        query: str,
+        params: dict[str, object] | None = None,
+        max_rows: int | None = None,
+    ) -> dict[str, object]:
+        """Execute a raw read-only SQL query and return rows."""
+        with DbRpcClient.from_config(config, client_name="mcp") as db:
+            result = db.raw_query(query, params=params, max_rows=max_rows)
+        return cast("dict[str, object]", result.model_dump(mode="json"))
+
     @mcp.tool(name="stats")
     def stats() -> dict[str, object]:
         """Return dashboard statistics equivalent to the UI frontend."""
         _ensure_django()
+        from celery_root.components.web.views import dashboard as dashboard_views  # noqa: PLC0415
+
         payload = dashboard_views.dashboard_stats()
         with DbRpcClient.from_config(config, client_name="mcp") as db:
             task_stats = _fetch_task_stats(db)
@@ -185,6 +211,7 @@ def create_asgi_app() -> ASGIApp:
     if mcp_config is None:
         msg = "MCP is disabled in the current configuration."
         raise RuntimeError(msg)
+    require_optional_scope("mcp")
     server = create_mcp_server()
     base_path = _normalize_path(mcp_config.path)
     base_path_slash = f"{base_path}/" if base_path != "/" else "/"

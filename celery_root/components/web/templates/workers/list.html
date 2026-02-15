@@ -16,13 +16,6 @@ SPDX-License-Identifier: BSD-3-Clause
       <h2>Brokers & workers</h2>
       <p>Inspect brokers, drill into workers, and follow queue activity.</p>
     </div>
-    <div class="page-actions">
-      <a class="btn ghost" href="{% url 'worker-add' %}">Add worker</a>
-      <form method="post" action="{% url 'workers-restart' %}">
-        {% csrf_token %}
-        <button class="btn ghost" type="submit">Restart all</button>
-      </form>
-    </div>
   </header>
 
   <section class="detail-card loading-card" data-workers-loading>

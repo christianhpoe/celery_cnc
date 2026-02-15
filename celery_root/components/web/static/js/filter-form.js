@@ -21,6 +21,9 @@
     if (!(field instanceof HTMLInputElement || field instanceof HTMLSelectElement)) {
       return false;
     }
+    if (field.dataset.autoSubmit === "false") {
+      return false;
+    }
     if (field instanceof HTMLInputElement && field.type === "hidden") {
       return false;
     }

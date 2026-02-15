@@ -19,8 +19,12 @@ from pydantic import BaseModel, ValidationError
 
 from celery_root.core.db.adapters.base import BaseDBController
 from celery_root.shared.schemas import (
+    BrokerQueueSnapshotRequest,
+    BrokerQueueSnapshotResponse,
     CleanupRequest,
     CleanupResponse,
+    DbInfoRequest,
+    DbInfoResponse,
     DeleteScheduleRequest,
     GetTaskRequest,
     GetTaskResponse,
@@ -28,6 +32,7 @@ from celery_root.shared.schemas import (
     GetWorkerResponse,
     HeatmapRequest,
     HeatmapResponse,
+    IngestBrokerQueueEventRequest,
     IngestTaskEventRequest,
     IngestWorkerEventRequest,
     ListSchedulesRequest,
@@ -45,6 +50,8 @@ from celery_root.shared.schemas import (
     Ok,
     PingRequest,
     PingResponse,
+    RawQueryRequest,
+    RawQueryResponse,
     RpcError,
     RpcRequestEnvelope,
     RpcResponseEnvelope,
@@ -60,6 +67,8 @@ from celery_root.shared.schemas import (
     TaskStatsResponse,
     ThroughputRequest,
     ThroughputResponse,
+    WorkerEventSnapshotRequest,
+    WorkerEventSnapshotResponse,
 )
 
 if TYPE_CHECKING:
@@ -67,6 +76,7 @@ if TYPE_CHECKING:
 
     from celery_root.config import CeleryRootConfig
     from celery_root.shared.schemas.domain import (
+        BrokerQueueEvent,
         Schedule,
         Task,
         TaskEvent,
@@ -103,7 +113,7 @@ def _authkey_from_config(config: CeleryRootConfig) -> bytes | None:
 
 @dataclass(slots=True)
 class _RpcSettings:
-    address: tuple[str, int]
+    address: str
     authkey: bytes | None
     timeout_seconds: float
     max_message_bytes: int
@@ -120,6 +130,7 @@ class _RpcTransport:
     def connect(self) -> None:
         if self._connection is not None:
             return
+        _LOGGER.debug("RPC connecting to %s", self._settings.address)
         self._connection = Client(self._settings.address, authkey=self._settings.authkey)
 
     def close(self) -> None:
@@ -193,11 +204,12 @@ class _RpcTransport:
                     raise RuntimeError(msg)
             except (OSError, EOFError, ValidationError) as exc:  # pragma: no cover - network dependent
                 last_error = exc
+                _LOGGER.debug("RPC request failed to %s: %s", self._settings.address, exc)
                 self.close()
                 continue
             else:
                 return response
-        msg = "RPC request failed"
+        msg = f"RPC request failed (address={self._settings.address})"
         raise RuntimeError(msg) from last_error
 
 
@@ -212,7 +224,7 @@ class DbRpcClient(BaseDBController):
     def from_config(cls, config: CeleryRootConfig, *, client_name: str | None = None) -> DbRpcClient:
         """Create a client from shared configuration settings."""
         settings = _RpcSettings(
-            address=(config.database.rpc_host, config.database.rpc_port),
+            address=config.database.rpc_address(),
             authkey=_authkey_from_config(config),
             timeout_seconds=config.database.rpc_timeout_seconds,
             max_message_bytes=config.database.rpc_max_message_bytes,
@@ -247,6 +259,28 @@ class DbRpcClient(BaseDBController):
     def get_schema(self) -> SchemaResponse:
         """Fetch database schema metadata."""
         return self._call("db.schema", SchemaRequest(), SchemaResponse)
+
+    def get_db_info(self) -> DbInfoResponse:
+        """Fetch database backend metadata."""
+        return self._call("db.info", DbInfoRequest(), DbInfoResponse)
+
+    def raw_query(
+        self,
+        query: str,
+        *,
+        params: Mapping[str, Any] | None = None,
+        max_rows: int | None = None,
+    ) -> RawQueryResponse:
+        """Execute a raw read-only query."""
+        if max_rows is None:
+            request = RawQueryRequest(query=query, params=dict(params) if params is not None else None)
+        else:
+            request = RawQueryRequest(
+                query=query,
+                params=dict(params) if params is not None else None,
+                max_rows=max_rows,
+            )
+        return self._call("db.raw_query", request, RawQueryResponse)
 
     def migrate(self, _from_version: int, _to_version: int) -> None:
         """Migrations must be performed by the DB manager."""
@@ -309,6 +343,19 @@ class DbRpcClient(BaseDBController):
         """Persist a worker event."""
         _ = self._call("events.worker.ingest", IngestWorkerEventRequest(event=event), Ok)
 
+    def store_broker_queue_event(self, event: BrokerQueueEvent) -> None:
+        """Persist a broker queue snapshot."""
+        _ = self._call("events.broker_queue.ingest", IngestBrokerQueueEventRequest(event=event), Ok)
+
+    def get_broker_queue_snapshot(self, broker_url: str) -> list[BrokerQueueEvent]:
+        """Return latest broker queue snapshots."""
+        response = self._call(
+            "broker.queues.snapshot",
+            BrokerQueueSnapshotRequest(broker_url=broker_url),
+            BrokerQueueSnapshotResponse,
+        )
+        return response.events
+
     def get_workers(self) -> list[Worker]:
         """Return all known workers."""
         response = self._call("workers.list", ListWorkersRequest(), ListWorkersResponse)
@@ -318,6 +365,15 @@ class DbRpcClient(BaseDBController):
         """Return a worker by hostname, if present."""
         response = self._call("workers.get", GetWorkerRequest(hostname=hostname), GetWorkerResponse)
         return response.worker
+
+    def get_worker_event_snapshot(self, hostname: str) -> WorkerEvent | None:
+        """Return latest worker event snapshot."""
+        response = self._call(
+            "workers.events.snapshot",
+            WorkerEventSnapshotRequest(hostname=hostname),
+            WorkerEventSnapshotResponse,
+        )
+        return response.event
 
     def get_task_stats(self, task_name: str | None, time_range: TimeRange | None) -> TaskStats:
         """Return aggregated task statistics."""

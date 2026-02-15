@@ -9,6 +9,7 @@
 from __future__ import annotations
 
 import os
+import re
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -27,6 +28,23 @@ _CHUNK_SIZE = 8192
 _MAX_BYTES = 1024 * 1024
 _LOG_PREFIX = f"{LOG_FILE_PREFIX}-"
 _LOG_SUFFIX = ".log"
+_SEVERITY_OPTIONS: tuple[tuple[str, str], ...] = (
+    ("trace", "Trace"),
+    ("debug", "Debug"),
+    ("info", "Info"),
+    ("warning", "Warning"),
+    ("error", "Error"),
+    ("critical", "Critical"),
+)
+_SEVERITY_ORDER = {name: index for index, (name, _) in enumerate(_SEVERITY_OPTIONS)}
+_SEVERITY_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
+    ("critical", re.compile(r"\bCRITICAL\b")),
+    ("error", re.compile(r"\bERROR\b")),
+    ("warning", re.compile(r"\bWARN(?:ING)?\b")),
+    ("info", re.compile(r"\bINFO\b")),
+    ("debug", re.compile(r"\bDEBUG\b")),
+    ("trace", re.compile(r"\bTRACE\b")),
+)
 
 
 def _log_dir() -> Path:
@@ -85,6 +103,40 @@ def _read_tail(path: Path, lines: int) -> str:
     return "\n".join(text.splitlines()[-lines:])
 
 
+def _normalize_severity(value: str | None) -> str:
+    if not value:
+        return ""
+    normalized = value.strip().lower()
+    if normalized in _SEVERITY_ORDER:
+        return normalized
+    return ""
+
+
+def _detect_severity(line: str) -> str | None:
+    for name, pattern in _SEVERITY_PATTERNS:
+        if pattern.search(line):
+            return name
+    return None
+
+
+def _filter_by_severity(content: str, minimum: str) -> str:
+    if not content or not minimum:
+        return content
+    lines = content.splitlines()
+    filtered: list[str] = []
+    last_level: str | None = None
+    for line in lines:
+        detected = _detect_severity(line)
+        if detected is not None:
+            last_level = detected
+            if detected == minimum:
+                filtered.append(line)
+            continue
+        if last_level == minimum:
+            filtered.append(line)
+    return "\n".join(filtered)
+
+
 def logs(request: HttpRequest) -> HttpResponse:
     """Render the logs page."""
     log_dir = _log_dir()
@@ -100,6 +152,7 @@ def logs(request: HttpRequest) -> HttpResponse:
     except ValueError:
         lines = _DEFAULT_LINES
     lines = max(1, min(lines, _MAX_LINES))
+    selected_severity = _normalize_severity(request.GET.get("severity"))
 
     content = ""
     error = None
@@ -118,6 +171,8 @@ def logs(request: HttpRequest) -> HttpResponse:
                 content = _read_tail(selected_path, lines)
             except OSError as exc:
                 error = f"Failed to read log file: {exc}"
+            else:
+                content = _filter_by_severity(content, selected_severity)
 
     context = {
         "title": "Logs",
@@ -126,6 +181,8 @@ def logs(request: HttpRequest) -> HttpResponse:
         "selected_file": selected_path.name if selected_path is not None else "",
         "log_dir": str(log_dir),
         "lines": lines,
+        "severity_options": _SEVERITY_OPTIONS,
+        "selected_severity": selected_severity,
         "content": content,
         "error": error,
     }
@@ -136,6 +193,7 @@ def logs(request: HttpRequest) -> HttpResponse:
                 "selected_component": context["selected_component"],
                 "selected_file": context["selected_file"],
                 "lines": context["lines"],
+                "severity": context["selected_severity"],
                 "content": context["content"],
                 "error": context["error"],
             },

@@ -17,6 +17,7 @@ if TYPE_CHECKING:
 
 from celery_root.core.db.adapters.base import BaseDBController
 from celery_root.core.db.models import (
+    BrokerQueueEvent,
     Schedule,
     Task,
     TaskEvent,
@@ -79,10 +80,18 @@ class FakeDB(BaseDBController):
 
     def store_worker_event(self, _event: WorkerEvent) -> None: ...
 
+    def store_broker_queue_event(self, _event: BrokerQueueEvent) -> None: ...
+
+    def get_broker_queue_snapshot(self, _broker_url: str) -> Sequence[BrokerQueueEvent]:
+        return []
+
     def get_workers(self) -> Sequence[Worker]:
         return []
 
     def get_worker(self, _hostname: str) -> Worker | None:
+        return None
+
+    def get_worker_event_snapshot(self, _hostname: str) -> WorkerEvent | None:
         return None
 
     def get_task_stats(self, _task_name: str | None, _time_range: TimeRange | None) -> TaskStats:
@@ -119,7 +128,7 @@ class DummyApp:
 
 def make_registry(app: DummyApp) -> WorkerRegistry:
     registry = WorkerRegistry()
-    registry._apps["dummy"] = cast("Celery", app)  # noqa: SLF001
+    registry._apps["dummy"] = cast("Celery", app)
     return registry
 
 
@@ -174,7 +183,7 @@ def test_smart_retry_resends_descendants_in_order() -> None:
         called.append((name, tuple(args or ()), dict(kwargs or {})))
         return name
 
-    results = retry.smart_retry(registry, db, "a", sender=cast("retry._TaskSender", sender))  # noqa: SLF001
+    results = retry.smart_retry(registry, db, "a", sender=cast("retry._TaskSender", sender))
 
     assert results == ["t1", "t2", "t3"]
     assert called == [

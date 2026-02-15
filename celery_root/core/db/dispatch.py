@@ -12,12 +12,16 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel
-from sqlalchemy import inspect
+from sqlalchemy import inspect, text
 
 from celery_root.core.db.adapters.sqlite import SQLiteController
 from celery_root.shared.schemas import (
+    BrokerQueueSnapshotRequest,
+    BrokerQueueSnapshotResponse,
     CleanupRequest,
     CleanupResponse,
+    DbInfoRequest,
+    DbInfoResponse,
     DeleteScheduleRequest,
     GetTaskRequest,
     GetTaskResponse,
@@ -25,6 +29,7 @@ from celery_root.shared.schemas import (
     GetWorkerResponse,
     HeatmapRequest,
     HeatmapResponse,
+    IngestBrokerQueueEventRequest,
     IngestTaskEventRequest,
     IngestWorkerEventRequest,
     ListSchedulesRequest,
@@ -42,6 +47,8 @@ from celery_root.shared.schemas import (
     Ok,
     PingRequest,
     PingResponse,
+    RawQueryRequest,
+    RawQueryResponse,
     SchemaColumn,
     SchemaIndex,
     SchemaRequest,
@@ -57,6 +64,8 @@ from celery_root.shared.schemas import (
     TaskStatsResponse,
     ThroughputRequest,
     ThroughputResponse,
+    WorkerEventSnapshotRequest,
+    WorkerEventSnapshotResponse,
 )
 from celery_root.shared.schemas.domain import TaskEvent, TaskRelation
 
@@ -147,6 +156,49 @@ def _schema(controller: BaseDBController, _request: SchemaRequest) -> SchemaResp
     return SchemaResponse(dialect=controller._engine.dialect.name, tables=tables)  # noqa: SLF001
 
 
+def _db_info(controller: BaseDBController, _request: DbInfoRequest) -> DbInfoResponse:
+    if not isinstance(controller, SQLiteController):
+        msg = "Database metadata is only supported for SQLite backends."
+        raise TypeError(msg)
+    engine = controller._engine  # noqa: SLF001
+    with engine.connect() as conn:
+        version = conn.execute(text("select sqlite_version()")).scalar_one_or_none()
+    path = str(controller._path) if controller._path is not None else None  # noqa: SLF001
+    storage = "memory" if controller._path is None else "file"  # noqa: SLF001
+    return DbInfoResponse(
+        backend="sqlite",
+        dialect=engine.dialect.name,
+        driver=engine.dialect.driver,
+        version=str(version) if version is not None else None,
+        language="SQL",
+        schema_version=controller.get_schema_version(),
+        storage=storage,
+        path=path,
+    )
+
+
+def _raw_query(controller: BaseDBController, request: RawQueryRequest) -> RawQueryResponse:
+    if not isinstance(controller, SQLiteController):
+        msg = "Raw queries are only supported for SQLite backends."
+        raise TypeError(msg)
+    params = request.params or {}
+    with controller._engine.connect() as conn:  # noqa: SLF001
+        result = conn.execute(text(request.query), params)
+        columns = list(result.keys())
+        max_rows = request.max_rows
+        rows = result.fetchmany(max_rows + 1)
+        truncated = len(rows) > max_rows
+        if truncated:
+            rows = rows[:max_rows]
+    row_values: list[list[Any]] = [list(row) for row in rows]
+    return RawQueryResponse(
+        columns=columns,
+        rows=row_values,
+        row_count=len(row_values),
+        truncated=truncated,
+    )
+
+
 def _ingest_task_event(controller: BaseDBController, request: IngestTaskEventRequest) -> Ok:
     controller.store_task_event(request.event)
     _store_relations(controller, request.event)
@@ -156,6 +208,27 @@ def _ingest_task_event(controller: BaseDBController, request: IngestTaskEventReq
 def _ingest_worker_event(controller: BaseDBController, request: IngestWorkerEventRequest) -> Ok:
     controller.store_worker_event(request.event)
     return Ok()
+
+
+def _ingest_broker_queue_event(controller: BaseDBController, request: IngestBrokerQueueEventRequest) -> Ok:
+    controller.store_broker_queue_event(request.event)
+    return Ok()
+
+
+def _broker_queue_snapshot(
+    controller: BaseDBController,
+    request: BrokerQueueSnapshotRequest,
+) -> BrokerQueueSnapshotResponse:
+    events = list(controller.get_broker_queue_snapshot(request.broker_url))
+    return BrokerQueueSnapshotResponse(events=events)
+
+
+def _worker_event_snapshot(
+    controller: BaseDBController,
+    request: WorkerEventSnapshotRequest,
+) -> WorkerEventSnapshotResponse:
+    event = controller.get_worker_event_snapshot(request.hostname)
+    return WorkerEventSnapshotResponse(event=event)
 
 
 def _store_relation(controller: BaseDBController, request: StoreTaskRelationRequest) -> Ok:
@@ -258,6 +331,18 @@ RPC_OPERATIONS: dict[str, RpcOperation[Any, Any]] = {
         SchemaResponse,
         _schema,
     ),
+    "db.info": RpcOperation(
+        "db.info",
+        DbInfoRequest,
+        DbInfoResponse,
+        _db_info,
+    ),
+    "db.raw_query": RpcOperation(
+        "db.raw_query",
+        RawQueryRequest,
+        RawQueryResponse,
+        _raw_query,
+    ),
     "events.task.ingest": RpcOperation(
         "events.task.ingest",
         IngestTaskEventRequest,
@@ -269,6 +354,24 @@ RPC_OPERATIONS: dict[str, RpcOperation[Any, Any]] = {
         IngestWorkerEventRequest,
         Ok,
         _ingest_worker_event,
+    ),
+    "events.broker_queue.ingest": RpcOperation(
+        "events.broker_queue.ingest",
+        IngestBrokerQueueEventRequest,
+        Ok,
+        _ingest_broker_queue_event,
+    ),
+    "broker.queues.snapshot": RpcOperation(
+        "broker.queues.snapshot",
+        BrokerQueueSnapshotRequest,
+        BrokerQueueSnapshotResponse,
+        _broker_queue_snapshot,
+    ),
+    "workers.events.snapshot": RpcOperation(
+        "workers.events.snapshot",
+        WorkerEventSnapshotRequest,
+        WorkerEventSnapshotResponse,
+        _worker_event_snapshot,
     ),
     "relations.store": RpcOperation(
         "relations.store",

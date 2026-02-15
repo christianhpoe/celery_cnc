@@ -6,7 +6,7 @@
 
 [project]
 name = "celery_root"
-version = "0.2.0"
+version = "0.3.0"
 description = "Command & Control for Celery Workers"
 readme = "README.md"
 license = "BSD-3-Clause"
@@ -44,16 +44,27 @@ classifiers = [
 requires-python = ">=3.12,<3.15"
 dependencies = [
   "celery[tblib]>=5.0.5,<6",
-  "django>=4,<7",
-  "fastmcp>=2.12,<3",
   "pydantic>=2.12",
   "pydantic-settings>=2.5,<3",
   "sqlalchemy>=2,<3",
-  "uvicorn>=0.35.0,<1",
-  "prometheus-client>=0.13.0,<1",
+  "click>=8.1",
+]
+
+[project.optional-dependencies]
+web = [
+  "django>=4,<7",
+]
+otel = [
   "opentelemetry-sdk>=1.30,<2",
   "opentelemetry-exporter-otlp>=1.33,<2",
-  "click>=8.1",
+]
+prometheus = [
+  "prometheus-client>=0.13.0,<1",
+]
+mcp = [
+  "fastmcp>=2.12,<3",
+  "uvicorn>=0.35.0,<1",
+  "django>=4,<7",
 ]
 
 [project.urls]
@@ -70,6 +81,12 @@ celery-root = "celery_root.cli:celery_root"
 [dependency-groups]
 dev = [
   "celery[librabbitmq,redis,sqlalchemy]",
+  "django>=4,<7",
+  "fastmcp>=2.12,<3",
+  "uvicorn>=0.35.0,<1",
+  "prometheus-client>=0.13.0,<1",
+  "opentelemetry-sdk>=1.30,<2",
+  "opentelemetry-exporter-otlp>=1.33,<2",
   "sqlalchemy",
   "psycopg2-binary",
   "mypy",
@@ -106,7 +123,7 @@ max-complexity = 20
 convention = "google"
 
 [tool.ruff.lint.per-file-ignores]
-"tests/**/*.py" = ["D", "PLR2004", "S101"]
+"tests/**/*.py" = ["D", "PLR2004", "S101", "SLF001"]
 
 
 [tool.mypy]
