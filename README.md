@@ -88,6 +88,33 @@ Via Celery:
 celery -A demo.worker_math:app celery_root
 ```
 
+## Optional dependencies
+
+Celery Root ships optional components behind extras. Install only what you need.
+
+- `web`: Django-based UI.
+- `mcp`: MCP server (FastMCP + Uvicorn) and Django for ASGI integration.
+- `prometheus`: Prometheus metrics exporter.
+- `otel`: OpenTelemetry exporter.
+
+Install with `uv`:
+
+```bash
+uv sync --extra web --extra prometheus
+```
+
+Or install all extras:
+
+```bash
+uv sync --all-extras
+```
+
+Editable install with pip:
+
+```bash
+pip install -e ".[web,prometheus]"
+```
+
 ## Configuration
 
 Configuration is explicit via Pydantic models. Components are enabled when their config is provided (set to `None` to disable).
