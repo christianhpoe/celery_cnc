@@ -21,6 +21,8 @@ from celery_root.core.db.adapters.base import BaseDBController
 from celery_root.shared.schemas import (
     CleanupRequest,
     CleanupResponse,
+    DbInfoRequest,
+    DbInfoResponse,
     DeleteScheduleRequest,
     GetTaskRequest,
     GetTaskResponse,
@@ -45,6 +47,8 @@ from celery_root.shared.schemas import (
     Ok,
     PingRequest,
     PingResponse,
+    RawQueryRequest,
+    RawQueryResponse,
     RpcError,
     RpcRequestEnvelope,
     RpcResponseEnvelope,
@@ -249,6 +253,28 @@ class DbRpcClient(BaseDBController):
     def get_schema(self) -> SchemaResponse:
         """Fetch database schema metadata."""
         return self._call("db.schema", SchemaRequest(), SchemaResponse)
+
+    def get_db_info(self) -> DbInfoResponse:
+        """Fetch database backend metadata."""
+        return self._call("db.info", DbInfoRequest(), DbInfoResponse)
+
+    def raw_query(
+        self,
+        query: str,
+        *,
+        params: Mapping[str, Any] | None = None,
+        max_rows: int | None = None,
+    ) -> RawQueryResponse:
+        """Execute a raw read-only query."""
+        if max_rows is None:
+            request = RawQueryRequest(query=query, params=dict(params) if params is not None else None)
+        else:
+            request = RawQueryRequest(
+                query=query,
+                params=dict(params) if params is not None else None,
+                max_rows=max_rows,
+            )
+        return self._call("db.raw_query", request, RawQueryResponse)
 
     def migrate(self, _from_version: int, _to_version: int) -> None:
         """Migrations must be performed by the DB manager."""

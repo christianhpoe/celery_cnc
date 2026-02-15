@@ -12,12 +12,14 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel
-from sqlalchemy import inspect
+from sqlalchemy import inspect, text
 
 from celery_root.core.db.adapters.sqlite import SQLiteController
 from celery_root.shared.schemas import (
     CleanupRequest,
     CleanupResponse,
+    DbInfoRequest,
+    DbInfoResponse,
     DeleteScheduleRequest,
     GetTaskRequest,
     GetTaskResponse,
@@ -42,6 +44,8 @@ from celery_root.shared.schemas import (
     Ok,
     PingRequest,
     PingResponse,
+    RawQueryRequest,
+    RawQueryResponse,
     SchemaColumn,
     SchemaIndex,
     SchemaRequest,
@@ -145,6 +149,49 @@ def _schema(controller: BaseDBController, _request: SchemaRequest) -> SchemaResp
             ],
         )
     return SchemaResponse(dialect=controller._engine.dialect.name, tables=tables)  # noqa: SLF001
+
+
+def _db_info(controller: BaseDBController, _request: DbInfoRequest) -> DbInfoResponse:
+    if not isinstance(controller, SQLiteController):
+        msg = "Database metadata is only supported for SQLite backends."
+        raise TypeError(msg)
+    engine = controller._engine  # noqa: SLF001
+    with engine.connect() as conn:
+        version = conn.execute(text("select sqlite_version()")).scalar_one_or_none()
+    path = str(controller._path) if controller._path is not None else None  # noqa: SLF001
+    storage = "memory" if controller._path is None else "file"  # noqa: SLF001
+    return DbInfoResponse(
+        backend="sqlite",
+        dialect=engine.dialect.name,
+        driver=engine.dialect.driver,
+        version=str(version) if version is not None else None,
+        language="SQL",
+        schema_version=controller.get_schema_version(),
+        storage=storage,
+        path=path,
+    )
+
+
+def _raw_query(controller: BaseDBController, request: RawQueryRequest) -> RawQueryResponse:
+    if not isinstance(controller, SQLiteController):
+        msg = "Raw queries are only supported for SQLite backends."
+        raise TypeError(msg)
+    params = request.params or {}
+    with controller._engine.connect() as conn:  # noqa: SLF001
+        result = conn.execute(text(request.query), params)
+        columns = list(result.keys())
+        max_rows = request.max_rows
+        rows = result.fetchmany(max_rows + 1)
+        truncated = len(rows) > max_rows
+        if truncated:
+            rows = rows[:max_rows]
+    row_values: list[list[Any]] = [list(row) for row in rows]
+    return RawQueryResponse(
+        columns=columns,
+        rows=row_values,
+        row_count=len(row_values),
+        truncated=truncated,
+    )
 
 
 def _ingest_task_event(controller: BaseDBController, request: IngestTaskEventRequest) -> Ok:
@@ -257,6 +304,18 @@ RPC_OPERATIONS: dict[str, RpcOperation[Any, Any]] = {
         SchemaRequest,
         SchemaResponse,
         _schema,
+    ),
+    "db.info": RpcOperation(
+        "db.info",
+        DbInfoRequest,
+        DbInfoResponse,
+        _db_info,
+    ),
+    "db.raw_query": RpcOperation(
+        "db.raw_query",
+        RawQueryRequest,
+        RawQueryResponse,
+        _raw_query,
     ),
     "events.task.ingest": RpcOperation(
         "events.task.ingest",

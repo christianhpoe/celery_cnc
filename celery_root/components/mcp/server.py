@@ -166,6 +166,24 @@ def create_mcp_server() -> FastMCP:
             schema = db.get_schema()
         return cast("dict[str, object]", schema.model_dump(mode="json"))
 
+    @mcp.tool(name="db_info")
+    def db_info() -> dict[str, object]:
+        """Return database backend metadata."""
+        with DbRpcClient.from_config(config, client_name="mcp") as db:
+            info = db.get_db_info()
+        return cast("dict[str, object]", info.model_dump(mode="json"))
+
+    @mcp.tool(name="db_query")
+    def db_query(
+        query: str,
+        params: dict[str, object] | None = None,
+        max_rows: int | None = None,
+    ) -> dict[str, object]:
+        """Execute a raw read-only SQL query and return rows."""
+        with DbRpcClient.from_config(config, client_name="mcp") as db:
+            result = db.raw_query(query, params=params, max_rows=max_rows)
+        return cast("dict[str, object]", result.model_dump(mode="json"))
+
     @mcp.tool(name="stats")
     def stats() -> dict[str, object]:
         """Return dashboard statistics equivalent to the UI frontend."""

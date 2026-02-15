@@ -10,9 +10,10 @@ from __future__ import annotations
 
 import datetime as _dt
 import importlib
+import re
 from typing import TYPE_CHECKING, Any, Literal
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 if TYPE_CHECKING:
     from .domain import (
@@ -330,3 +331,83 @@ class SchemaResponse(_BaseSchema):
 
     dialect: str
     tables: dict[str, SchemaTable]
+
+
+class DbInfoRequest(_BaseSchema):
+    """Request database backend metadata."""
+
+
+class DbInfoResponse(_BaseSchema):
+    """Response with database backend metadata."""
+
+    backend: str
+    dialect: str
+    version: str | None = None
+    language: str
+    schema_version: int
+    driver: str | None = None
+    storage: str | None = None
+    path: str | None = None
+
+
+class RawQueryRequest(_BaseSchema):
+    """Request to execute a raw read-only query."""
+
+    query: str
+    params: dict[str, Any] | None = None
+    max_rows: int = Field(default=200, ge=1, le=1000)
+
+    _READONLY_PRAGMAS = {
+        "collation_list",
+        "compile_options",
+        "database_list",
+        "foreign_key_list",
+        "function_list",
+        "index_info",
+        "index_list",
+        "index_xinfo",
+        "module_list",
+        "pragma_list",
+        "table_info",
+        "table_xinfo",
+    }
+
+    @field_validator("query")
+    @classmethod
+    def _validate_query(cls, value: str) -> str:
+        cleaned = value.strip()
+        if not cleaned:
+            msg = "Query cannot be empty."
+            raise ValueError(msg)
+        while cleaned.endswith(";"):
+            cleaned = cleaned[:-1].rstrip()
+        if ";" in cleaned:
+            msg = "Multiple statements are not allowed."
+            raise ValueError(msg)
+        lowered = cleaned.lower()
+        if lowered.startswith("pragma"):
+            match = re.match(r"pragma\\s+([\\w.]+)", cleaned, flags=re.IGNORECASE)
+            if not match:
+                msg = "PRAGMA name is required."
+                raise ValueError(msg)
+            pragma_name = match.group(1).split(".")[-1].lower()
+            if pragma_name not in cls._READONLY_PRAGMAS:
+                msg = f"PRAGMA '{pragma_name}' is not allowed."
+                raise ValueError(msg)
+            if "=" in cleaned:
+                msg = "PRAGMA assignments are not allowed."
+                raise ValueError(msg)
+            return cleaned
+        if not lowered.startswith(("select", "with", "explain")):
+            msg = "Only read-only SELECT/WITH/EXPLAIN queries are allowed."
+            raise ValueError(msg)
+        return cleaned
+
+
+class RawQueryResponse(_BaseSchema):
+    """Response with raw query results."""
+
+    columns: list[str]
+    rows: list[list[Any]]
+    row_count: int
+    truncated: bool = False
