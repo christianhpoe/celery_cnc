@@ -28,17 +28,20 @@ import {
   applyGroupLayout,
   buildGraphModel,
   buildHighlight,
+  buildPathClosure,
   buildQueryMatches,
   buildReactFlowEdges,
   buildReactFlowNodes,
   buildRunningEdges,
   computeCounts,
   filterGraph,
+  NODE_HEIGHT,
+  NODE_WIDTH,
   type FilterState,
   type GraphFlowNode,
   type GraphModel,
 } from "./graph/transforms";
-import type { GraphOptions, GraphPayload, GraphUpdatePayload, TaskState } from "./graph/types";
+import type { GraphEdgePayload, GraphOptions, GraphPayload, GraphUpdatePayload, TaskState } from "./graph/types";
 
 interface GraphAppProps {
   payload: GraphPayload;
@@ -100,6 +103,8 @@ function GraphCanvas({ payload, options }: GraphAppProps) {
   const baseNodesRef = useRef<ReturnType<typeof buildReactFlowNodes>>([]);
   const layoutNodesRef = useRef<GraphModel["nodes"]>(new Map());
   const baseEdgesRef = useRef<ReturnType<typeof buildReactFlowEdges>>([]);
+  const lastStableEdgesRef = useRef<GraphEdgePayload[]>([]);
+  const graphModelRef = useRef<GraphModel>(graphModel);
   const manualPositionsRef = useRef<Map<string, { x: number; y: number }>>(new Map());
   const lastLayoutKeyRef = useRef<string | null>(null);
   const hasFitRef = useRef(false);
@@ -107,8 +112,28 @@ function GraphCanvas({ payload, options }: GraphAppProps) {
   const completedAtRef = useRef<number | null>(null);
   const [layoutPositions, setLayoutPositions] = useState<Map<string, { x: number; y: number }> | null>(null);
 
+  useEffect(() => {
+    graphModelRef.current = graphModel;
+  }, [graphModel]);
+
   const totalNodes = graphModel.nodes.size;
-  const counts = useMemo(() => computeCounts(graphModel.nodes.values()), [graphModel.nodes]);
+  const counts = useMemo(() => {
+    const metaCounts = graphModel.meta?.counts;
+    if (metaCounts) {
+      const total =
+        metaCounts.total +
+        metaCounts.pending +
+        metaCounts.running +
+        metaCounts.retry +
+        metaCounts.success +
+        metaCounts.failure +
+        metaCounts.revoked;
+      if (total > 0) {
+        return metaCounts;
+      }
+    }
+    return computeCounts(graphModel.nodes.values());
+  }, [graphModel.meta, graphModel.nodes]);
   const hasActive = counts.pending > 0 || counts.running > 0 || counts.retry > 0;
 
   useEffect(() => {
@@ -125,14 +150,32 @@ function GraphCanvas({ payload, options }: GraphAppProps) {
   const showMeta = totalNodes <= 1000 || zoom >= 1.1;
 
   const filteredModel = useMemo(() => filterGraph(graphModel, filter), [graphModel, filter]);
+  const displayEdges = useMemo(() => {
+    if (filteredModel.edges.length > 0 || filteredModel.nodes.size <= 1) {
+      if (filteredModel.edges.length > 0) {
+        lastStableEdgesRef.current = filteredModel.edges;
+      }
+      return filteredModel.edges;
+    }
+    return lastStableEdgesRef.current.length > 0 ? lastStableEdgesRef.current : filteredModel.edges;
+  }, [filteredModel.edges, filteredModel.nodes]);
   const queryMatches = useMemo(
     () => buildQueryMatches(graphModel.nodes.values(), filter.query),
     [graphModel.nodes, filter.query],
   );
-  const highlight = useMemo(
-    () => buildHighlight(filteredModel.edges, hoveredId),
-    [filteredModel.edges, hoveredId],
-  );
+  const highlight = useMemo(() => {
+    if (selectedId) {
+      const pathNodes = buildPathClosure(displayEdges, new Set([selectedId]));
+      const edgeSet = new Set<string>();
+      displayEdges.forEach((edge) => {
+        if (pathNodes.has(edge.source) && pathNodes.has(edge.target)) {
+          edgeSet.add(edge.id || `${edge.source}->${edge.target}`);
+        }
+      });
+      return { nodes: pathNodes, edges: edgeSet };
+    }
+    return buildHighlight(displayEdges, hoveredId);
+  }, [displayEdges, hoveredId, selectedId]);
   const runningIds = useMemo(() => {
     const running = new Set<string>();
     graphModel.nodes.forEach((node) => {
@@ -143,8 +186,8 @@ function GraphCanvas({ payload, options }: GraphAppProps) {
     return running;
   }, [graphModel.nodes]);
   const runningEdges = useMemo(
-    () => buildRunningEdges(filteredModel.edges, runningIds),
-    [filteredModel.edges, runningIds],
+    () => buildRunningEdges(displayEdges, runningIds),
+    [displayEdges, runningIds],
   );
 
   const baseNodes = useMemo(
@@ -155,18 +198,18 @@ function GraphCanvas({ payload, options }: GraphAppProps) {
   baseNodesRef.current = baseNodes;
   layoutNodesRef.current = filteredModel.nodes;
   const baseEdges = useMemo(
-    () => buildReactFlowEdges(filteredModel.edges, highlight.edges, runningEdges, disableAnimations),
-    [filteredModel.edges, highlight.edges, runningEdges, disableAnimations],
+    () => buildReactFlowEdges(displayEdges, highlight.edges, runningEdges, disableAnimations),
+    [displayEdges, highlight.edges, runningEdges, disableAnimations],
   );
   baseEdgesRef.current = baseEdges;
   const topologyKey = useMemo(() => {
     const nodeIds = Array.from(filteredModel.nodes.keys()).sort().join("|");
-    const edgeIds = filteredModel.edges
+    const edgeIds = displayEdges
       .map((edge) => edge.id || `${edge.source}->${edge.target}:${edge.kind ?? "chain"}`)
       .sort()
       .join("|");
     return `${nodeIds}::${edgeIds}`;
-  }, [filteredModel.nodes, filteredModel.edges]);
+  }, [filteredModel.nodes, displayEdges]);
   useEffect(() => {
     let active = true;
     const layoutKey = `${topologyKey}:${direction}`;
@@ -188,7 +231,7 @@ function GraphCanvas({ payload, options }: GraphAppProps) {
       direction,
     );
     const layoutNodeIds = new Set(layoutInput.map((node) => node.id));
-    const layoutEdges = filteredModel.edges
+    const layoutEdges = displayEdges
       .filter(
         (edge) =>
           layoutNodeIds.has(edge.source) &&
@@ -196,6 +239,35 @@ function GraphCanvas({ payload, options }: GraphAppProps) {
           edge.source !== edge.target,
       )
       .map((edge) => ({ source: edge.source, target: edge.target }));
+    if (displayEdges.length === 0 && layoutInput.length > 0) {
+      const ordered = [...layoutInput].sort((left, right) => left.id.localeCompare(right.id));
+      const columns = Math.max(1, Math.ceil(Math.sqrt(ordered.length)));
+      const gapX = NODE_WIDTH + 80;
+      const gapY = NODE_HEIGHT + 80;
+      const positions = new Map<string, { x: number; y: number }>();
+      ordered.forEach((node, index) => {
+        const col = index % columns;
+        const row = Math.floor(index / columns);
+        positions.set(node.id, { x: col * gapX, y: row * gapY });
+      });
+      setLayoutPositions(positions);
+      const displayNodes = baseNodesRef.current.map((node) => ({
+        ...node,
+        position:
+          manualPositionsRef.current.get(node.id) ??
+          positions.get(node.id) ??
+          node.position,
+      }));
+      const grouped = applyGroupLayout(displayNodes, baseEdgesRef.current);
+      setRfNodes(grouped);
+      setRfEdges(baseEdgesRef.current);
+      if (active && shouldRelayout) {
+        setIsLayouting(false);
+      }
+      return () => {
+        active = false;
+      };
+    }
     layoutNodes(layoutInput, layoutEdges, direction)
       .then((layouted) => {
         if (!active) {
@@ -225,7 +297,7 @@ function GraphCanvas({ payload, options }: GraphAppProps) {
     return () => {
       active = false;
     };
-  }, [direction, layoutPositions, topologyKey, filteredModel.edges]);
+  }, [direction, layoutPositions, topologyKey, displayEdges]);
 
   useEffect(() => {
     if (!layoutPositions) {
@@ -246,6 +318,12 @@ function GraphCanvas({ payload, options }: GraphAppProps) {
   }, [baseNodes, baseEdges, layoutPositions]);
 
   useEffect(() => {
+    if (baseEdges.length > 0 || filteredModel.nodes.size <= 1) {
+      setRfEdges(baseEdges);
+    }
+  }, [baseEdges, filteredModel.nodes.size]);
+
+  useEffect(() => {
     if (!hasFitRef.current && instanceRef.current && rfNodes.length > 0) {
       instanceRef.current.fitView({ padding: 0.2 });
       hasFitRef.current = true;
@@ -263,7 +341,7 @@ function GraphCanvas({ payload, options }: GraphAppProps) {
   }, [queryMatches, rfNodes]);
 
   useEffect(() => {
-    if (!options?.refreshUrl) {
+    if (!options?.refreshUrl || !hasActive) {
       return undefined;
     }
     let timer: number | undefined;
@@ -303,9 +381,10 @@ function GraphCanvas({ payload, options }: GraphAppProps) {
       if (payload.node_updates.length === 0) {
         return;
       }
+      const currentModel = graphModelRef.current;
       if (
-        payload.node_count !== graphModel.nodes.size ||
-        payload.edge_count !== graphModel.edges.length
+        payload.node_count !== currentModel.nodes.size ||
+        payload.edge_count !== currentModel.edges.length
       ) {
         const snapshotUrl = deriveSnapshotUrl(options);
         if (snapshotUrl) {
@@ -369,7 +448,7 @@ function GraphCanvas({ payload, options }: GraphAppProps) {
         window.clearTimeout(timer);
       }
     };
-  }, [options]);
+  }, [options, hasActive]);
 
   const onQueryChange = useCallback((value: string) => {
     setFilter((prev) => ({ ...prev, query: value }));
@@ -435,7 +514,7 @@ function GraphCanvas({ payload, options }: GraphAppProps) {
   }, [graphModel.edges, selectedId]);
 
   const handleNodeClick = useCallback((_event: unknown, node: { id: string }) => {
-    setSelectedId(node.id);
+    setSelectedId((prev) => (prev === node.id ? null : node.id));
   }, []);
 
   const handleMoveEnd = useCallback((_event: unknown, viewport: { zoom: number }) => {
