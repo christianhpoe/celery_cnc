@@ -309,11 +309,11 @@ SPDX-License-Identifier: BSD-3-Clause
 
       function getCopyPayloadAsync(sourceId, format, field) {
         var fallback = getCopyPayload(sourceId, format);
-        if (!field) {
+        if (!taskApiUrl) {
           return Promise.resolve(fallback);
         }
         return fetchTaskPayload().then(function (payload) {
-          if (!payload || !(field in payload)) {
+          if (!payload || !field || !(field in payload)) {
             return fallback;
           }
           return normalizePayload(payload[field], format) || fallback;
