@@ -9,7 +9,11 @@ SPDX-License-Identifier: BSD-3-Clause
 {% extends "base.html" %}
 
 {% block content %}
-  <article class="detail-hero" data-task-api-url="{% url 'api-task-detail' task.task_id %}">
+  <article
+    class="detail-hero"
+    data-task-id="{{ task.task_id }}"
+    data-task-api-url="{% url 'api-task-detail' task.task_id %}"
+  >
     <div>
       <p class="eyebrow">Task lookup</p>
       <h2>{{ task.name }}</h2>
@@ -268,6 +272,17 @@ SPDX-License-Identifier: BSD-3-Clause
 
       var detailRoot = document.querySelector("[data-task-api-url]");
       var taskApiUrl = detailRoot ? detailRoot.getAttribute("data-task-api-url") : "";
+      var taskId = detailRoot ? detailRoot.getAttribute("data-task-id") : "";
+      if (!taskApiUrl) {
+        if (taskId) {
+          taskApiUrl = "/api/tasks/" + encodeURIComponent(taskId) + "/";
+        } else {
+          var pathMatch = window.location.pathname.match(/\\/tasks\\/([^/]+)\\/?$/);
+          if (pathMatch) {
+            taskApiUrl = "/api/tasks/" + encodeURIComponent(pathMatch[1]) + "/";
+          }
+        }
+      }
       var taskPayloadPromise = null;
 
       function fetchTaskPayload() {
