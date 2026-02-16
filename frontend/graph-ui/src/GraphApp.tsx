@@ -83,6 +83,20 @@ const TASK_TYPE_PALETTE: string[] = [
   "#047857",
 ];
 
+function choosePaletteStep(length: number): number {
+  if (length <= 1) {
+    return 1;
+  }
+  const target = Math.floor(length / 2) + 1;
+  const gcd = (a: number, b: number): number => (b === 0 ? a : gcd(b, a % b));
+  for (let step = target; step < target + length; step += 1) {
+    if (gcd(step, length) === 1) {
+      return step;
+    }
+  }
+  return 1;
+}
+
 function buildInitialFilter(totalNodes: number): FilterState {
   if (totalNodes > 2000) {
     return {
@@ -135,6 +149,56 @@ function totalFromCounts(counts: GraphMetaCounts | null | undefined): number {
   );
 }
 
+function snapshotHasMissingEdges(snapshot: GraphPayload): boolean {
+  return snapshot.nodes.length > 1 && snapshot.edges.length === 0;
+}
+
+function snapshotKey(snapshotUrl: string): string {
+  return `celery-root:graph:force-snapshot:${snapshotUrl}`;
+}
+
+function markForceSnapshot(snapshotUrl: string | undefined): void {
+  if (!snapshotUrl) {
+    return;
+  }
+  try {
+    sessionStorage.setItem(snapshotKey(snapshotUrl), "1");
+  } catch {
+    // Ignore storage failures (private mode, etc.).
+  }
+}
+
+function takeForceSnapshot(snapshotUrl: string | undefined): boolean {
+  if (!snapshotUrl) {
+    return false;
+  }
+  try {
+    const key = snapshotKey(snapshotUrl);
+    const value = sessionStorage.getItem(key);
+    if (value !== "1") {
+      return false;
+    }
+    sessionStorage.removeItem(key);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function shouldSkipSnapshot(
+  snapshot: GraphPayload,
+  currentModel: GraphModel,
+  hasSeenEdges: boolean,
+): boolean {
+  if (currentModel.nodes.size > 0 && snapshot.nodes.length === 0) {
+    return true;
+  }
+  if (snapshotHasMissingEdges(snapshot) && (currentModel.nodes.size > 1 || hasSeenEdges)) {
+    return true;
+  }
+  return false;
+}
+
 function GraphCanvas({ payload, options }: GraphAppProps) {
   const [graphModel, setGraphModel] = useState<GraphModel>(() => buildGraphModel(payload));
   const [filter, setFilter] = useState<FilterState>(() =>
@@ -154,15 +218,25 @@ function GraphCanvas({ payload, options }: GraphAppProps) {
   const lastStableEdgesRef = useRef<GraphEdgePayload[]>([]);
   const graphModelRef = useRef<GraphModel>(graphModel);
   const snapshotAttemptRef = useRef<string | null>(null);
+  const missingEdgesAttemptRef = useRef<Map<string, number>>(new Map());
+  const missingEdgesTimerRef = useRef<number | null>(null);
+  const hasSeenEdgesRef = useRef<boolean>(graphModel.edges.length > 0);
   const manualPositionsRef = useRef<Map<string, { x: number; y: number }>>(new Map());
   const lastLayoutKeyRef = useRef<string | null>(null);
   const hasFitRef = useRef(false);
   const lastUpdateRef = useRef<string | null>(payload.meta?.generated_at ?? null);
   const completedAtRef = useRef<number | null>(null);
   const [layoutPositions, setLayoutPositions] = useState<Map<string, { x: number; y: number }> | null>(null);
+  const edgeRenderKeyRef = useRef<string | null>(null);
+  const edgeRemountAttemptsRef = useRef<Map<string, number>>(new Map());
+  const [flowKey, setFlowKey] = useState<number>(0);
 
   useEffect(() => {
     graphModelRef.current = graphModel;
+    if (graphModel.edges.length > 0) {
+      hasSeenEdgesRef.current = true;
+      lastStableEdgesRef.current = graphModel.edges;
+    }
   }, [graphModel]);
 
   const totalNodes = graphModel.nodes.size;
@@ -235,8 +309,11 @@ function GraphCanvas({ payload, options }: GraphAppProps) {
     });
     const sortedNames = Array.from(names).sort((left, right) => left.localeCompare(right));
     const colors = new Map<string, string>();
+    const paletteSize = TASK_TYPE_PALETTE.length;
+    const step = choosePaletteStep(paletteSize);
     sortedNames.forEach((name, index) => {
-      colors.set(name, TASK_TYPE_PALETTE[index % TASK_TYPE_PALETTE.length]);
+      const paletteIndex = (index * step) % paletteSize;
+      colors.set(name, TASK_TYPE_PALETTE[paletteIndex]);
     });
     return colors;
   }, [graphModel.nodes]);
@@ -394,6 +471,54 @@ function GraphCanvas({ payload, options }: GraphAppProps) {
       setRfEdges(baseEdges);
     }
   }, [baseEdges, filteredModel.nodes.size]);
+  useEffect(() => {
+    if (rfNodes.length === 0 || rfEdges.length === 0) {
+      return;
+    }
+    if (edgeRenderKeyRef.current === topologyKey) {
+      return;
+    }
+    edgeRenderKeyRef.current = topologyKey;
+    setRfEdges((edges) =>
+      edges.map((edge) => ({
+        ...edge,
+        data: edge.data ? { ...edge.data } : edge.data,
+      })),
+    );
+  }, [rfEdges.length, rfNodes.length, topologyKey]);
+  useEffect(() => {
+    if (rfNodes.length === 0 || rfEdges.length === 0) {
+      return;
+    }
+    const attemptCount = edgeRemountAttemptsRef.current.get(topologyKey) ?? 0;
+    if (attemptCount >= 2) {
+      return;
+    }
+    let active = true;
+    const checkEdges = () => {
+      if (!active) {
+        return;
+      }
+      const edgePaths = document.querySelectorAll(".react-flow__edge-path");
+      const edgesSvg = document.querySelector(".react-flow__edges svg");
+      if (!edgesSvg || edgePaths.length === 0) {
+        edgeRemountAttemptsRef.current.set(topologyKey, attemptCount + 1);
+        hasFitRef.current = false;
+        setFlowKey((value) => value + 1);
+      }
+    };
+    const rafId = requestAnimationFrame(() => {
+      checkEdges();
+      window.setTimeout(checkEdges, 150);
+    });
+    return () => {
+      active = false;
+      cancelAnimationFrame(rafId);
+    };
+  }, [rfEdges.length, rfNodes.length, topologyKey]);
+  useEffect(() => {
+    hasFitRef.current = false;
+  }, [flowKey]);
 
   useEffect(() => {
     if (!hasFitRef.current && instanceRef.current && rfNodes.length > 0) {
@@ -441,6 +566,116 @@ function GraphCanvas({ payload, options }: GraphAppProps) {
   }, [countTotal, graphModel.meta, graphModel.nodes.size, options]);
 
   useEffect(() => {
+    if (graphModel.nodes.size <= 1 || graphModel.edges.length > 0) {
+      return;
+    }
+    markForceSnapshot(deriveSnapshotUrl(options));
+  }, [graphModel.edges.length, graphModel.nodes.size, options]);
+
+  useEffect(() => {
+    const snapshotUrl = deriveSnapshotUrl(options);
+    if (!takeForceSnapshot(snapshotUrl)) {
+      return;
+    }
+    let active = true;
+    fetch(snapshotUrl, { headers: { Accept: "application/json" }, cache: "no-store" })
+      .then((response) => (response.ok ? response.json() : null))
+      .then((snapshot) => {
+        if (!active || !snapshot) {
+          return;
+        }
+        const payload = snapshot as GraphPayload;
+        if (snapshotHasMissingEdges(payload)) {
+          markForceSnapshot(snapshotUrl);
+          return;
+        }
+        if (payload.nodes.length === 0 && graphModelRef.current.nodes.size > 0) {
+          markForceSnapshot(snapshotUrl);
+          return;
+        }
+        setGraphModel(buildGraphModel(payload));
+        completedAtRef.current = null;
+      })
+      .catch(() => {
+        markForceSnapshot(snapshotUrl);
+      });
+    return () => {
+      active = false;
+    };
+  }, [options]);
+
+  useEffect(() => {
+    if (graphModel.edges.length > 0 || graphModel.nodes.size <= 1) {
+      if (missingEdgesTimerRef.current) {
+        window.clearTimeout(missingEdgesTimerRef.current);
+        missingEdgesTimerRef.current = null;
+      }
+      return;
+    }
+    const snapshotUrl = deriveSnapshotUrl(options);
+    if (!snapshotUrl) {
+      return;
+    }
+    const attemptKey = `${snapshotUrl}:${graphModel.meta?.generated_at ?? "unknown"}:${graphModel.nodes.size}`;
+    let active = true;
+    const scheduleAttempt = () => {
+      if (!active) {
+        return;
+      }
+      const attempts = missingEdgesAttemptRef.current.get(attemptKey) ?? 0;
+      if (attempts >= 5) {
+        return;
+      }
+      const delay =
+        attempts === 0
+          ? 150
+          : attempts === 1
+            ? 400
+            : attempts === 2
+              ? 800
+              : attempts === 3
+                ? 1200
+                : 2000;
+      missingEdgesAttemptRef.current.set(attemptKey, attempts + 1);
+      const timer = window.setTimeout(() => {
+        fetch(snapshotUrl, { headers: { Accept: "application/json" } })
+          .then((response) => (response.ok ? response.json() : null))
+          .then((snapshot) => {
+            if (!snapshot) {
+              scheduleAttempt();
+              return;
+            }
+            const payload = snapshot as GraphPayload;
+            if (
+              shouldSkipSnapshot(payload, graphModelRef.current, hasSeenEdgesRef.current) ||
+              snapshotHasMissingEdges(payload)
+            ) {
+              if (snapshotHasMissingEdges(payload)) {
+                markForceSnapshot(snapshotUrl);
+              }
+              scheduleAttempt();
+              return;
+            }
+            setGraphModel(buildGraphModel(payload));
+            completedAtRef.current = null;
+          })
+          .catch(() => {
+            scheduleAttempt();
+          });
+      }, delay);
+      missingEdgesTimerRef.current = timer;
+    };
+    scheduleAttempt();
+    return () => {
+      active = false;
+      if (missingEdgesTimerRef.current) {
+        window.clearTimeout(missingEdgesTimerRef.current);
+        missingEdgesTimerRef.current = null;
+      }
+    };
+  }, [graphModel.edges.length, graphModel.meta, graphModel.nodes.size, options]);
+
+  useEffect(() => {
     if (!options?.refreshUrl || !hasActive) {
       return undefined;
     }
@@ -473,13 +708,12 @@ function GraphCanvas({ payload, options }: GraphAppProps) {
           const snapshotResponse = await fetch(snapshotUrl, { headers: { Accept: "application/json" } });
           if (snapshotResponse.ok) {
             const snapshot = (await snapshotResponse.json()) as GraphPayload;
-            if (
-              snapshot.nodes.length === 0 &&
-              currentModel.nodes.size > 0 &&
-              totalFromCounts(snapshot.meta?.counts) > 0
-            ) {
-              return;
+          if (shouldSkipSnapshot(snapshot, currentModel, hasSeenEdgesRef.current)) {
+            if (snapshotHasMissingEdges(snapshot)) {
+              markForceSnapshot(snapshotUrl);
             }
+            return;
+          }
             setGraphModel(buildGraphModel(snapshot));
             completedAtRef.current = null;
           }
@@ -498,13 +732,12 @@ function GraphCanvas({ payload, options }: GraphAppProps) {
           const snapshotResponse = await fetch(snapshotUrl, { headers: { Accept: "application/json" } });
           if (snapshotResponse.ok) {
             const snapshot = (await snapshotResponse.json()) as GraphPayload;
-            if (
-              snapshot.nodes.length === 0 &&
-              currentModel.nodes.size > 0 &&
-              totalFromCounts(snapshot.meta?.counts) > 0
-            ) {
-              return;
+          if (shouldSkipSnapshot(snapshot, currentModel, hasSeenEdgesRef.current)) {
+            if (snapshotHasMissingEdges(snapshot)) {
+              markForceSnapshot(snapshotUrl);
             }
+            return;
+          }
             setGraphModel(buildGraphModel(snapshot));
             completedAtRef.current = null;
           }
@@ -678,6 +911,7 @@ function GraphCanvas({ payload, options }: GraphAppProps) {
       <div className="dag-body">
         <div className="dag-graph">
           <ReactFlow
+            key={flowKey}
             nodes={rfNodes}
             edges={rfEdges}
             nodeTypes={{ taskNode: TaskNode, chordNode: ChordJoinNode, groupNode: GroupNode }}
