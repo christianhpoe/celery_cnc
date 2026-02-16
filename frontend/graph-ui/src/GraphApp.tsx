@@ -49,6 +49,32 @@ interface GraphAppProps {
 }
 
 const ACTIVE_STATES: TaskState[] = ["STARTED", "RETRY", "PENDING", "RECEIVED"];
+const TASK_TYPE_PALETTE: string[] = [
+  "#2563eb",
+  "#0ea5e9",
+  "#14b8a6",
+  "#10b981",
+  "#22c55e",
+  "#84cc16",
+  "#eab308",
+  "#f59e0b",
+  "#f97316",
+  "#ef4444",
+  "#f43f5e",
+  "#ec4899",
+  "#d946ef",
+  "#a855f7",
+  "#8b5cf6",
+  "#6366f1",
+  "#0f766e",
+  "#0891b2",
+  "#0284c7",
+  "#64748b",
+  "#7c3aed",
+  "#be123c",
+  "#b45309",
+  "#047857",
+];
 
 function buildInitialFilter(totalNodes: number): FilterState {
   if (totalNodes > 2000) {
@@ -176,6 +202,20 @@ function GraphCanvas({ payload, options }: GraphAppProps) {
     }
     return buildHighlight(displayEdges, hoveredId);
   }, [displayEdges, hoveredId, selectedId]);
+  const taskTypeColors = useMemo(() => {
+    const names = new Set<string>();
+    graphModel.nodes.forEach((node) => {
+      if (node.task_name) {
+        names.add(node.task_name);
+      }
+    });
+    const sortedNames = Array.from(names).sort((left, right) => left.localeCompare(right));
+    const colors = new Map<string, string>();
+    sortedNames.forEach((name, index) => {
+      colors.set(name, TASK_TYPE_PALETTE[index % TASK_TYPE_PALETTE.length]);
+    });
+    return colors;
+  }, [graphModel.nodes]);
   const runningIds = useMemo(() => {
     const running = new Set<string>();
     graphModel.nodes.forEach((node) => {
@@ -192,8 +232,15 @@ function GraphCanvas({ payload, options }: GraphAppProps) {
 
   const baseNodes = useMemo(
     () =>
-      buildReactFlowNodes(filteredModel.nodes.values(), showMeta, highlight.nodes, queryMatches, direction),
-    [filteredModel.nodes, showMeta, highlight.nodes, queryMatches, direction],
+      buildReactFlowNodes(
+        filteredModel.nodes.values(),
+        showMeta,
+        highlight.nodes,
+        queryMatches,
+        direction,
+        taskTypeColors,
+      ),
+    [filteredModel.nodes, showMeta, highlight.nodes, queryMatches, direction, taskTypeColors],
   );
   baseNodesRef.current = baseNodes;
   layoutNodesRef.current = filteredModel.nodes;
@@ -229,6 +276,7 @@ function GraphCanvas({ payload, options }: GraphAppProps) {
       new Set(),
       new Set(),
       direction,
+      taskTypeColors,
     );
     const layoutNodeIds = new Set(layoutInput.map((node) => node.id));
     const layoutEdges = displayEdges
@@ -497,7 +545,14 @@ function GraphCanvas({ payload, options }: GraphAppProps) {
 
   const selectedNode = selectedId ? graphModel.nodes.get(selectedId) : null;
   const selectedNodeData = selectedNode
-    ? buildReactFlowNodes([selectedNode].values(), true, new Set(), new Set(), direction)[0].data
+    ? buildReactFlowNodes(
+        [selectedNode].values(),
+        true,
+        new Set(),
+        new Set(),
+        direction,
+        taskTypeColors,
+      )[0].data
     : null;
 
   const childrenIds = useMemo(() => {

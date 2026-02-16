@@ -323,7 +323,7 @@
 .dag-node {
   background: var(--dag-surface);
   border-radius: 14px;
-  border: 1px solid var(--dag-border);
+  border: 1px solid var(--dag-task-border, var(--dag-border));
   padding: 10px 12px;
   display: flex;
   flex-direction: column;
