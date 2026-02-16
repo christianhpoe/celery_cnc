@@ -906,6 +906,10 @@ body {
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
 }
 
+.detail-grid--spaced {
+  margin-top: 1rem;
+}
+
 .detail-stack {
   display: grid;
   gap: 1rem;
