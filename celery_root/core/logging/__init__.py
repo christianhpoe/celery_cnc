@@ -6,6 +6,12 @@
 
 """Logging helpers for Celery Root."""
 
-from .adapters.base import BaseLogController
+from .queue import LogQueueConfig, LogQueueRuntime, configure_subprocess_logging, create_log_runtime, log_level_name
 
-__all__ = ["BaseLogController"]
+__all__ = [
+    "LogQueueConfig",
+    "LogQueueRuntime",
+    "configure_subprocess_logging",
+    "create_log_runtime",
+    "log_level_name",
+]

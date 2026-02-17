@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING, Any, cast
 
 import pytest
 
-from celery_root.config import CeleryRootConfig, DatabaseConfigSqlite, LoggingConfigFile
+from celery_root.config import CeleryRootConfig, DatabaseConfigSqlite
 from celery_root.core import reconciler
 from celery_root.core.db.models import BrokerQueueEvent, Task, TaskEvent, TaskFilter, Worker, WorkerEvent
 from celery_root.core.db.rpc_client import DbRpcClient
@@ -95,7 +95,6 @@ class _DummyRegistry:
 def recon_config(tmp_path: Path) -> CeleryRootConfig:
     db_path = tmp_path / "root.db"
     return CeleryRootConfig(
-        logging=LoggingConfigFile(log_dir=tmp_path / "logs"),
         database=DatabaseConfigSqlite(db_path=db_path),
     )
 
@@ -207,7 +206,6 @@ def test_reconciler_run(monkeypatch: pytest.MonkeyPatch, recon_config: CeleryRoo
             return self._apps
 
     monkeypatch.setattr(reconciler, "set_settings", lambda *_args, **_kwargs: None)
-    monkeypatch.setattr(reconciler, "configure_process_logging", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(DbRpcClient, "from_config", lambda *_args, **_kwargs: _DummyClient())
     monkeypatch.setattr(reconciler, "WorkerRegistry", _DummyRegistry)
 

@@ -10,7 +10,7 @@ import threading
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
-from celery_root.config import CeleryRootConfig, DatabaseConfigSqlite, LoggingConfigFile
+from celery_root.config import CeleryRootConfig, DatabaseConfigSqlite
 from celery_root.core.db.adapters.sqlite import SQLiteController
 from celery_root.core.db.dispatch import _db_info, _raw_query, _store_relations
 from celery_root.core.db.manager import DBManager
@@ -45,7 +45,6 @@ def test_dispatch_helpers(tmp_path: Path) -> None:
 def test_db_manager_dispatch_errors(tmp_path: Path) -> None:
     db_path = tmp_path / "root.db"
     config = CeleryRootConfig(
-        logging=LoggingConfigFile(log_dir=tmp_path / "logs"),
         database=DatabaseConfigSqlite(db_path=db_path, rpc_max_message_bytes=10),
     )
     manager = DBManager(config)

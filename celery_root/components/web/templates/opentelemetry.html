@@ -13,24 +13,9 @@ SPDX-License-Identifier: BSD-3-Clause
     <div>
       <p class="eyebrow">Metrics</p>
       <h2>OpenTelemetry</h2>
-      <p>Metrics exporter status and configuration summary.</p>
+      <p>Metrics exporter configuration summary.</p>
     </div>
   </header>
-
-  <section class="detail-card">
-    <h3>Exporter Status</h3>
-    <p class="detail-runtime">
-      Status:
-      <span
-        class="badge {% if component.status == 'up' %}badge-success{% elif component.status == 'down' %}badge-danger{% elif component.status == 'configured' %}badge-info{% else %}badge-muted{% endif %}"
-      >
-        {{ component.status }}
-      </span>
-    </p>
-    {% if component.pid %}
-      <p class="detail-runtime">Process PID: {{ component.pid }}</p>
-    {% endif %}
-  </section>
 
   <section class="detail-card">
     <h3>Configuration</h3>

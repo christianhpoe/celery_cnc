@@ -11,7 +11,7 @@ from __future__ import annotations
 from django.urls import path
 
 from . import auth
-from .views import api, beat, broker, dashboard, errors, graphs, logs, metrics, settings, system, tasks, workers
+from .views import api, beat, broker, dashboard, errors, graphs, metrics, settings, system, tasks, workers
 
 urlpatterns = [
     path("login", auth.login, name="login"),
@@ -56,7 +56,6 @@ urlpatterns = [
     path("beat/schedule/<str:schedule_id>/edit/", beat.beat_edit, name="beat-edit"),
     path("beat/schedule/<str:schedule_id>/delete/", beat.beat_delete, name="beat-delete"),
     path("beat/schedule/sync/", beat.beat_sync, name="beat-sync"),
-    path("logs/", logs.logs, name="logs"),
     path("settings/", settings.settings_page, name="settings"),
     path("api/workers/", api.worker_list, name="api-workers"),
     path("api/tasks/", api.tasks, name="api-tasks"),

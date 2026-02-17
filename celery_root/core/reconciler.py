@@ -21,7 +21,7 @@ from celery_root.config import set_settings
 from celery_root.core.db.models import BrokerQueueEvent, Task, TaskEvent, TaskFilter, WorkerEvent
 from celery_root.core.db.rpc_client import DbRpcClient, RpcCallError
 from celery_root.core.engine.brokers import list_queues
-from celery_root.core.logging.setup import configure_process_logging
+from celery_root.core.logging import LogQueueConfig, configure_subprocess_logging
 from celery_root.core.registry import WorkerRegistry
 from celery_root.shared.redaction import redact_access_data, redact_url_password
 
@@ -175,10 +175,11 @@ def _task_event_from_meta(task: Task, status: str, meta: Mapping[str, object]) -
 class Reconciler(Process):
     """Background reconciler for periodic inspections and task completion backfill."""
 
-    def __init__(self, config: CeleryRootConfig) -> None:
+    def __init__(self, config: CeleryRootConfig, log_config: LogQueueConfig | None = None) -> None:
         """Initialize the reconciler process."""
         super().__init__(daemon=True)
         self._config = config
+        self._log_config = log_config
         self._stop_event = Event()
         self._logger = logging.getLogger(__name__)
         self._db_client: DbRpcClient | None = None
@@ -199,7 +200,7 @@ class Reconciler(Process):
     def run(self) -> None:
         """Run reconciliation loop until stopped."""
         set_settings(self._config)
-        configure_process_logging(self._config, component="reconciler")
+        configure_subprocess_logging(self._log_config)
         self._logger.info("Reconciler starting.")
         if self._config is not None:
             self._logger.info("Reconciler DB RPC socket path: %s", self._config.database.rpc_socket_path)

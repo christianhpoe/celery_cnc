@@ -14,15 +14,15 @@ import threading
 import time
 from collections.abc import Callable
 from contextlib import suppress
+from dataclasses import dataclass
 from multiprocessing import Event, Process, Queue
 from pathlib import Path
 from queue import Empty
 from typing import TYPE_CHECKING, Protocol, cast
 
 from celery_root.config import set_settings
-from celery_root.core.component_status import ComponentStatusStore, build_statuses
 from celery_root.core.db.manager import DBManager
-from celery_root.core.logging.setup import configure_process_logging
+from celery_root.core.logging import LogQueueConfig, configure_subprocess_logging, log_level_name
 from celery_root.optional import require_optional_scope
 from celery_root.shared.redaction import redact_url_password
 
@@ -69,6 +69,14 @@ class _UvicornServerType(Protocol):
     def __call__(self, *, config: _UvicornConfigInstance) -> _UvicornServerInstance: ...
 
 
+@dataclass(frozen=True, slots=True)
+class _ExporterRuntimeConfig:
+    component: str
+    metrics_url: str | None
+    event_queue: Queue[object] | None
+    log_config: LogQueueConfig | None
+
+
 type McpDependencies = tuple[_UvicornConfigType, _UvicornServerType, Callable[[], object]]
 
 UvicornConfig: _UvicornConfigType | None = None
@@ -107,12 +115,19 @@ def _load_mcp_dependencies() -> McpDependencies:
 
 
 class _WebServerProcess(Process):
-    def __init__(self, host: str, port: int, config: CeleryRootConfig) -> None:
+    def __init__(
+        self,
+        host: str,
+        port: int,
+        config: CeleryRootConfig,
+        log_config: LogQueueConfig | None,
+    ) -> None:
         """Create a web server process wrapper."""
         super().__init__(daemon=True)
         self._host = host
         self._port = port
         self._root_config = config
+        self._log_config = log_config
         self._stop_event = Event()
 
     def stop(self) -> None:
@@ -122,7 +137,7 @@ class _WebServerProcess(Process):
     def run(self) -> None:
         """Run the web UI development server."""
         set_settings(self._root_config)
-        configure_process_logging(self._root_config, component="web")
+        configure_subprocess_logging(self._log_config)
         logger = logging.getLogger(__name__)
         logger.info("Web server starting on %s:%s", self._host, self._port)
         logger.info("Web server DB RPC socket path: %s", self._root_config.database.rpc_socket_path)
@@ -146,17 +161,16 @@ class _ExporterProcess(Process):
         self,
         exporter_factory: Callable[[], BaseMonitoringExporter],
         config: CeleryRootConfig,
-        component: str,
-        metrics_url: str | None = None,
-        event_queue: Queue[object] | None = None,
+        runtime: _ExporterRuntimeConfig,
     ) -> None:
         """Create a process to host a monitoring exporter."""
         super().__init__(daemon=True)
         self._exporter_factory = exporter_factory
         self._root_config = config
-        self._component = component
-        self._metrics_url = metrics_url
-        self._event_queue = event_queue
+        self._component = runtime.component
+        self._metrics_url = runtime.metrics_url
+        self._event_queue = runtime.event_queue
+        self._log_config = runtime.log_config
         self._stop_event = Event()
 
     def stop(self) -> None:
@@ -166,7 +180,7 @@ class _ExporterProcess(Process):
     def run(self) -> None:
         """Run the exporter and keep it alive until stopped."""
         set_settings(self._root_config)
-        configure_process_logging(self._root_config, component=self._component)
+        configure_subprocess_logging(self._log_config)
         logger = logging.getLogger(__name__)
         logger.info("Exporter process starting (%s).", self._component)
         exporter = self._exporter_factory()
@@ -220,12 +234,19 @@ class _ExporterProcess(Process):
 
 
 class _McpServerProcess(Process):
-    def __init__(self, host: str, port: int, config: CeleryRootConfig) -> None:
+    def __init__(
+        self,
+        host: str,
+        port: int,
+        config: CeleryRootConfig,
+        log_config: LogQueueConfig | None,
+    ) -> None:
         """Create a MCP server process wrapper."""
         super().__init__(daemon=True)
         self._host = host
         self._port = port
         self._config = config
+        self._log_config = log_config
         self._stop_event = Event()
 
     def stop(self) -> None:
@@ -235,7 +256,7 @@ class _McpServerProcess(Process):
     def run(self) -> None:
         """Run the MCP server."""
         set_settings(self._config)
-        configure_process_logging(self._config, component="mcp")
+        configure_subprocess_logging(self._log_config)
         logger = logging.getLogger(__name__)
         logger.info("MCP server starting on %s:%s", self._host, self._port)
         logger.info("MCP server DB RPC socket path: %s", self._config.database.rpc_socket_path)
@@ -247,7 +268,7 @@ class _McpServerProcess(Process):
             app=app,
             host=self._host,
             port=self._port,
-            log_level=self._config.logging.log_level.lower(),
+            log_level=log_level_name(self._log_config.level if self._log_config else None),
             access_log=False,
             ws="websockets-sansio",
         )
@@ -270,16 +291,17 @@ class ProcessManager:
         registry: WorkerRegistry,
         config: CeleryRootConfig,
         controller_factory: Callable[[], BaseDBController] | None,
+        log_config: LogQueueConfig | None = None,
     ) -> None:
         """Initialize the process manager with runtime dependencies."""
         self._registry = registry
         self._config = config
         self._controller_factory = controller_factory
+        self._log_config = log_config
         self._logger = logging.getLogger(__name__)
         self._stop_event = Event()
         self._process_factories: dict[str, Callable[[], Process]] = {}
         self._processes: dict[str, Process] = {}
-        self._status_store = ComponentStatusStore.from_config(config)
 
     def start(self) -> None:
         """Start all configured subprocesses."""
@@ -298,12 +320,10 @@ class ProcessManager:
             self._logger.info("Starting process %s.", name)
             self._processes[name] = factory()
             self._processes[name].start()
-        self._write_statuses()
 
     def run(self) -> None:
         """Run the supervisor loop until stopped."""
         set_settings(self._config)
-        configure_process_logging(self._config, component="process_manager")
         self._logger.info("ProcessManager starting.")
         self._logger.info("DB RPC socket path: %s", self._config.database.rpc_socket_path)
         self._logger.info("DB RPC auth enabled: %s", bool(self._config.database.rpc_auth_key))
@@ -312,7 +332,6 @@ class ProcessManager:
         try:
             while not self._stop_event.is_set():
                 self._monitor()
-                self._write_statuses()
                 now = time.monotonic()
                 if now - last_heartbeat >= _HEARTBEAT_INTERVAL:
                     self._logger.info("ProcessManager heartbeat (%d processes).", len(self._processes))
@@ -340,7 +359,6 @@ class ProcessManager:
                 process.join(timeout=5)
                 if process.is_alive():
                     self._logger.warning("Process %s still running after terminate.", process.name)
-        self._write_statuses()
 
     def _build_processes(self) -> None:
         self._process_factories.clear()
@@ -348,6 +366,7 @@ class ProcessManager:
             DBManager,
             self._config,
             self._controller_factory,
+            self._log_config,
         )
         metrics_queues: list[Queue[object]] = []
         backend_map: dict[str, str] = {}
@@ -366,6 +385,12 @@ class ProcessManager:
             metrics_url = _metrics_url(self._config)
             prometheus_queue: Queue[object] = Queue(self._config.event_queue_maxsize)
             metrics_queues.append(prometheus_queue)
+            prometheus_runtime = _ExporterRuntimeConfig(
+                component="prometheus",
+                metrics_url=metrics_url,
+                event_queue=prometheus_queue,
+                log_config=self._log_config,
+            )
             self._process_factories["prometheus"] = functools.partial(
                 _ExporterProcess,
                 functools.partial(
@@ -375,9 +400,7 @@ class ProcessManager:
                     flower_compatibility=self._config.prometheus.flower_compatibility,
                 ),
                 self._config,
-                "prometheus",
-                metrics_url,
-                prometheus_queue,
+                prometheus_runtime,
             )
         if self._config.open_telemetry is not None:
             require_optional_scope("otel")
@@ -385,6 +408,12 @@ class ProcessManager:
 
             otel_queue: Queue[object] = Queue(self._config.event_queue_maxsize)
             metrics_queues.append(otel_queue)
+            otel_runtime = _ExporterRuntimeConfig(
+                component="otel",
+                metrics_url=None,
+                event_queue=otel_queue,
+                log_config=self._log_config,
+            )
             self._process_factories["otel"] = functools.partial(
                 _ExporterProcess,
                 functools.partial(
@@ -394,9 +423,7 @@ class ProcessManager:
                     broker_backend_map=backend_map,
                 ),
                 self._config,
-                "otel",
-                None,
-                otel_queue,
+                otel_runtime,
             )
         listener_counts: dict[str, int] = {}
         for broker_url in broker_groups:
@@ -411,10 +438,12 @@ class ProcessManager:
                 broker_url,
                 self._config,
                 metrics_queues=tuple(metrics_queues),
+                log_config=self._log_config,
             )
         self._process_factories["reconciler"] = functools.partial(
             Reconciler,
             self._config,
+            self._log_config,
         )
         if self._config.frontend is not None:
             require_optional_scope("web")
@@ -423,6 +452,7 @@ class ProcessManager:
                 self._config.frontend.host,
                 self._config.frontend.port,
                 self._config,
+                self._log_config,
             )
         if self._config.mcp is not None:
             require_optional_scope("mcp")
@@ -431,6 +461,7 @@ class ProcessManager:
                 self._config.mcp.host,
                 self._config.mcp.port,
                 self._config,
+                self._log_config,
             )
 
     def _monitor(self) -> None:
@@ -447,10 +478,6 @@ class ProcessManager:
             self._processes[name] = replacement
             replacement.start()
             self._logger.info("Process %s restarted.", name)
-
-    def _write_statuses(self) -> None:
-        statuses = build_statuses(self._processes)
-        self._status_store.write(statuses)
 
     def _wait_for_db_socket(self, process: Process) -> None:
         address = self._config.database.rpc_address()

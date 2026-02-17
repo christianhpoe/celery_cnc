@@ -19,7 +19,6 @@ from celery_root.config import (
     CeleryRootConfig,
     DatabaseConfigSqlite,
     FrontendConfig,
-    LoggingConfigFile,
     McpConfig,
     OpenTelemetryConfig,
     PrometheusConfig,
@@ -28,6 +27,7 @@ from celery_root.core.db.models import TaskEvent, TaskStats, WorkerEvent
 from celery_root.core.process_manager import (
     ProcessManager,
     _ExporterProcess,
+    _ExporterRuntimeConfig,
     _McpServerProcess,
     _metrics_url,
     _WebServerProcess,
@@ -116,7 +116,6 @@ class _DummyRegistry:
 def manager_config(tmp_path: Path) -> CeleryRootConfig:
     db_path = tmp_path / "root.db"
     return CeleryRootConfig(
-        logging=LoggingConfigFile(log_dir=tmp_path / "logs"),
         database=DatabaseConfigSqlite(db_path=db_path),
         frontend=FrontendConfig(host="127.0.0.1", port=5555),
         prometheus=PrometheusConfig(port=9000, prometheus_path="/metrics"),
@@ -134,7 +133,13 @@ def test_metrics_url(manager_config: CeleryRootConfig) -> None:
 def test_exporter_drain_events() -> None:
     exporter = _DummyExporter()
     queue: Queue[object] = Queue()
-    process = _ExporterProcess(lambda: exporter, CeleryRootConfig(), "test", event_queue=queue)
+    runtime = _ExporterRuntimeConfig(
+        component="test",
+        metrics_url=None,
+        event_queue=queue,
+        log_config=None,
+    )
+    process = _ExporterProcess(lambda: exporter, CeleryRootConfig(), runtime)
     logger = logging.getLogger(__name__)
 
     queue.put(TaskEvent(task_id="t1", name="demo", state="SUCCESS", timestamp=datetime.now(UTC)))
@@ -188,10 +193,8 @@ def test_run_and_stop(monkeypatch: pytest.MonkeyPatch, manager_config: CeleryRoo
         manager._stop_event.set()
 
     monkeypatch.setattr(manager, "start", lambda: None)
-    monkeypatch.setattr(manager, "_write_statuses", lambda: None)
     monkeypatch.setattr(manager, "_monitor", _monitor)
     monkeypatch.setattr("celery_root.core.process_manager.set_settings", lambda *_args, **_kwargs: None)
-    monkeypatch.setattr("celery_root.core.process_manager.configure_process_logging", lambda *_args, **_kwargs: None)
 
     manager.run()
     manager.stop()
@@ -214,9 +217,8 @@ def test_start_launches_processes(monkeypatch: pytest.MonkeyPatch, manager_confi
 
 
 def test_web_server_process_run(monkeypatch: pytest.MonkeyPatch, manager_config: CeleryRootConfig) -> None:
-    proc = _WebServerProcess("127.0.0.1", 5555, manager_config)
+    proc = _WebServerProcess("127.0.0.1", 5555, manager_config, None)
     monkeypatch.setattr("celery_root.core.process_manager.set_settings", lambda *_args, **_kwargs: None)
-    monkeypatch.setattr("celery_root.core.process_manager.configure_process_logging", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(
         "celery_root.components.web.devserver.serve",
         lambda _host, _port, shutdown_event: shutdown_event.set(),
@@ -227,9 +229,14 @@ def test_web_server_process_run(monkeypatch: pytest.MonkeyPatch, manager_config:
 def test_exporter_process_run(monkeypatch: pytest.MonkeyPatch, manager_config: CeleryRootConfig) -> None:
     exporter = _DummyExporter()
 
-    proc = _ExporterProcess(lambda: exporter, manager_config, "test")
+    runtime = _ExporterRuntimeConfig(
+        component="test",
+        metrics_url=None,
+        event_queue=None,
+        log_config=None,
+    )
+    proc = _ExporterProcess(lambda: exporter, manager_config, runtime)
     monkeypatch.setattr("celery_root.core.process_manager.set_settings", lambda *_args, **_kwargs: None)
-    monkeypatch.setattr("celery_root.core.process_manager.configure_process_logging", lambda *_args, **_kwargs: None)
 
     def _drain(_exporter: _DummyExporter, _logger: logging.Logger) -> None:
         proc.stop()
@@ -239,9 +246,8 @@ def test_exporter_process_run(monkeypatch: pytest.MonkeyPatch, manager_config: C
 
 
 def test_mcp_server_process_run(monkeypatch: pytest.MonkeyPatch, manager_config: CeleryRootConfig) -> None:
-    proc = _McpServerProcess("127.0.0.1", 5557, manager_config)
+    proc = _McpServerProcess("127.0.0.1", 5557, manager_config, None)
     monkeypatch.setattr("celery_root.core.process_manager.set_settings", lambda *_args, **_kwargs: None)
-    monkeypatch.setattr("celery_root.core.process_manager.configure_process_logging", lambda *_args, **_kwargs: None)
 
     class _Server:
         def __init__(self, *_args: object, **_kwargs: object) -> None:

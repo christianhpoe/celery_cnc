@@ -15,7 +15,7 @@ import pytest
 from django.test import RequestFactory
 
 from celery_root.components.web.views import system as system_views
-from celery_root.config import CeleryRootConfig, DatabaseConfigSqlite, LoggingConfigFile, PrometheusConfig
+from celery_root.config import CeleryRootConfig, DatabaseConfigSqlite, PrometheusConfig
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -101,7 +101,6 @@ def test_healthcheck_reports_failed_check(monkeypatch: pytest.MonkeyPatch) -> No
 
 def test_metrics_disabled_returns_404(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     config = CeleryRootConfig(
-        logging=LoggingConfigFile(log_dir=tmp_path / "logs"),
         database=DatabaseConfigSqlite(db_path=tmp_path / "db.sqlite"),
         prometheus=None,
     )
@@ -113,7 +112,6 @@ def test_metrics_disabled_returns_404(monkeypatch: pytest.MonkeyPatch, tmp_path:
 
 def test_metrics_unavailable_returns_503(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     config = CeleryRootConfig(
-        logging=LoggingConfigFile(log_dir=tmp_path / "logs"),
         database=DatabaseConfigSqlite(db_path=tmp_path / "db.sqlite"),
         prometheus=PrometheusConfig(port=9001, prometheus_path="/metrics"),
     )
@@ -131,7 +129,6 @@ def test_metrics_unavailable_returns_503(monkeypatch: pytest.MonkeyPatch, tmp_pa
 
 def test_metrics_success(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     config = CeleryRootConfig(
-        logging=LoggingConfigFile(log_dir=tmp_path / "logs"),
         database=DatabaseConfigSqlite(db_path=tmp_path / "db.sqlite"),
         prometheus=PrometheusConfig(port=9100, prometheus_path="/metrics"),
     )

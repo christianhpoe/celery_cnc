@@ -10,11 +10,11 @@ import json
 import logging
 from datetime import UTC, datetime
 from multiprocessing import Queue
-from pathlib import Path
 from typing import TYPE_CHECKING, cast
 
 if TYPE_CHECKING:
     from collections.abc import Callable
+    from pathlib import Path
     from typing import Self
 
     import pytest
@@ -22,7 +22,7 @@ if TYPE_CHECKING:
 
 from pydantic import BaseModel
 
-from celery_root.config import CeleryRootConfig, DatabaseConfigSqlite, LoggingConfigFile
+from celery_root.config import CeleryRootConfig, DatabaseConfigSqlite
 from celery_root.core import event_listener as listener
 from celery_root.core.db.models import TaskEvent, TaskRelation, WorkerEvent
 from celery_root.core.db.rpc_client import DbRpcClient
@@ -190,11 +190,7 @@ def test_select_event_app_and_accept_content(monkeypatch: pytest.MonkeyPatch) ->
     app_secondary.conf["result_serializer"] = "yaml"
 
     monkeypatch.setattr(listener, "_load_worker_apps", lambda *_args, **_kwargs: (app_primary, app_secondary))
-    config = CeleryRootConfig(
-        logging=LoggingConfigFile(log_dir=Path("./logs")),
-        database=DatabaseConfigSqlite(db_path=None),
-        worker_import_paths=["demo"],
-    )
+    config = CeleryRootConfig(database=DatabaseConfigSqlite(db_path=None), worker_import_paths=["demo"])
     app, apps = listener._select_event_app(config, "amqp://new", logging.getLogger(__name__))
     assert app.conf.broker_url == "amqp://new"
     accept = listener._collect_accept_content(apps)
@@ -213,10 +209,7 @@ def test_stringify_pydantic_model() -> None:
 
 
 def test_listener_run_and_listen(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-    config = CeleryRootConfig(
-        logging=LoggingConfigFile(log_dir=tmp_path / "logs"),
-        database=DatabaseConfigSqlite(db_path=tmp_path / "db.sqlite"),
-    )
+    config = CeleryRootConfig(database=DatabaseConfigSqlite(db_path=tmp_path / "db.sqlite"))
     instance = listener.EventListener("redis://", config=config)
 
     class _DummyClient:
@@ -224,7 +217,6 @@ def test_listener_run_and_listen(monkeypatch: pytest.MonkeyPatch, tmp_path: Path
             return None
 
     monkeypatch.setattr(listener, "set_settings", lambda *_args, **_kwargs: None)
-    monkeypatch.setattr(listener, "configure_process_logging", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(DbRpcClient, "from_config", lambda *_args, **_kwargs: _DummyClient())
     monkeypatch.setattr(listener, "_select_event_app", lambda *_args, **_kwargs: (_DummyApp(), ()))
     monkeypatch.setattr(listener, "_configure_from_workers", lambda *_args, **_kwargs: None)

@@ -14,7 +14,6 @@ from celery_root.components.mcp import server as mcp_server
 from celery_root.config import (
     CeleryRootConfig,
     DatabaseConfigSqlite,
-    LoggingConfigFile,
     McpConfig,
     get_settings,
     set_settings,
@@ -91,7 +90,6 @@ def test_fetch_task_stats() -> None:
 def test_create_server_errors(tmp_path: Path) -> None:
     original = get_settings()
     config = CeleryRootConfig(
-        logging=LoggingConfigFile(log_dir=tmp_path / "logs"),
         database=DatabaseConfigSqlite(db_path=tmp_path / "root.db"),
         mcp=None,
     )
@@ -101,7 +99,6 @@ def test_create_server_errors(tmp_path: Path) -> None:
             mcp_server.create_mcp_server()
 
         config = CeleryRootConfig(
-            logging=LoggingConfigFile(log_dir=tmp_path / "logs2"),
             database=DatabaseConfigSqlite(db_path=tmp_path / "root2.db"),
             mcp=McpConfig(auth_key=None),
         )
@@ -115,7 +112,6 @@ def test_create_server_errors(tmp_path: Path) -> None:
 def test_create_asgi_app(tmp_path: Path) -> None:
     original = get_settings()
     config = CeleryRootConfig(
-        logging=LoggingConfigFile(log_dir=tmp_path / "logs3"),
         database=DatabaseConfigSqlite(db_path=tmp_path / "db3.sqlite"),
         mcp=McpConfig(auth_key="token"),
     )

@@ -65,7 +65,6 @@ STATICFILES_DIRS = [str(BASE_DIR / "static")]
 
 SESSION_ENGINE = "django.contrib.sessions.backends.signed_cookies"
 
-CELERY_ROOT_LOG_DIR = Path(CONFIG.logging.log_dir)
 CELERY_ROOT_RETENTION_DAYS = int(getattr(CONFIG.database, "retention_days", 0))
 
 

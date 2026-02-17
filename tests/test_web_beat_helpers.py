@@ -22,7 +22,6 @@ from celery_root.config import (
     BeatConfig,
     CeleryRootConfig,
     DatabaseConfigSqlite,
-    LoggingConfigFile,
     get_settings,
     set_settings,
 )
@@ -99,7 +98,6 @@ def test_parse_form_validation() -> None:
 def test_list_schedules_and_add(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     original = get_settings()
     config = CeleryRootConfig(
-        logging=LoggingConfigFile(log_dir=tmp_path / "logs"),
         database=DatabaseConfigSqlite(db_path=tmp_path / "db.sqlite"),
         beat=BeatConfig(),
     )
@@ -142,7 +140,6 @@ def test_list_schedules_and_add(monkeypatch: pytest.MonkeyPatch, tmp_path: Path)
 def test_ensure_beat_enabled(tmp_path: Path) -> None:
     original = get_settings()
     config = CeleryRootConfig(
-        logging=LoggingConfigFile(log_dir=tmp_path / "logs"),
         database=DatabaseConfigSqlite(db_path=tmp_path / "db.sqlite"),
         beat=None,
     )
@@ -157,7 +154,6 @@ def test_ensure_beat_enabled(tmp_path: Path) -> None:
 def test_beat_edit_delete_sync(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     original = get_settings()
     config = CeleryRootConfig(
-        logging=LoggingConfigFile(log_dir=tmp_path / "logs2"),
         database=DatabaseConfigSqlite(db_path=tmp_path / "db2.sqlite"),
         beat=BeatConfig(),
     )

@@ -9,7 +9,7 @@ from __future__ import annotations
 import threading
 from typing import TYPE_CHECKING
 
-from celery_root.config import CeleryRootConfig, DatabaseConfigSqlite, LoggingConfigFile
+from celery_root.config import CeleryRootConfig, DatabaseConfigSqlite
 from celery_root.core.db.adapters.sqlite import SQLiteController
 from celery_root.core.db.dispatch import RPC_OPERATIONS
 from celery_root.core.db.manager import DBManager, _authkey_from_config, _prepare_socket
@@ -22,7 +22,6 @@ if TYPE_CHECKING:
 
 def test_authkey_from_config(tmp_path: Path) -> None:
     config = CeleryRootConfig(
-        logging=LoggingConfigFile(log_dir=tmp_path / "logs"),
         database=DatabaseConfigSqlite(db_path=tmp_path / "db.sqlite", rpc_auth_key="secret"),
     )
     auth = _authkey_from_config(config)
@@ -38,7 +37,6 @@ def test_prepare_socket_removes_file(tmp_path: Path) -> None:
 
 def test_handle_operation_ping(tmp_path: Path) -> None:
     config = CeleryRootConfig(
-        logging=LoggingConfigFile(log_dir=tmp_path / "logs2"),
         database=DatabaseConfigSqlite(db_path=tmp_path / "db2.sqlite"),
     )
     manager = DBManager(config)
@@ -51,7 +49,6 @@ def test_handle_operation_ping(tmp_path: Path) -> None:
 
 def test_serve_loop(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     config = CeleryRootConfig(
-        logging=LoggingConfigFile(log_dir=tmp_path / "logs3"),
         database=DatabaseConfigSqlite(db_path=tmp_path / "db3.sqlite", rpc_socket_path=tmp_path / "sock"),
     )
     manager = DBManager(config)
