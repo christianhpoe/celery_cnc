@@ -8,6 +8,7 @@
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 
 from celery_root import (
@@ -23,6 +24,9 @@ from demo.worker_math import app as math_app
 from demo.worker_sleep import app as sleep_app
 from demo.worker_text import app as text_app
 
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.WARNING)
+
 
 def main() -> None:
     """Start the Root supervisor and dev web server."""
@@ -33,7 +37,7 @@ def main() -> None:
         prometheus=PrometheusConfig(),
         mcp=McpConfig(port=9100, auth_key="some-super-secret-key"),
     )
-    root = CeleryRoot(math_app, text_app, sleep_app, config=config)
+    root = CeleryRoot(math_app, text_app, sleep_app, config=config, logger=logger)
     root.run()
 
 
