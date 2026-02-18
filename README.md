@@ -6,6 +6,11 @@ SPDX-FileContributor: AUTHORS.md
 SPDX-License-Identifier: BSD-3-Clause
 -->
 
+[![PyPI](https://img.shields.io/pypi/v/celery_root.svg)](https://pypi.org/project/celery_root/)
+[![Python](https://img.shields.io/pypi/pyversions/celery_root.svg)](https://pypi.org/project/celery_root/)
+[![Docs](https://img.shields.io/badge/docs-celeryroot.eu-blue)](https://docs.celeryroot.eu/)
+
+
 # Celery Root
 
 Docs: https://docs.celeryroot.eu
