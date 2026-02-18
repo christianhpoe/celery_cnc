@@ -127,13 +127,11 @@ from celery_root import (
     CeleryRootConfig,
     DatabaseConfigSqlite,
     FrontendConfig,
-    LoggingConfigFile,
     OpenTelemetryConfig,
     PrometheusConfig,
 )
 
 config = CeleryRootConfig(
-    logging=LoggingConfigFile(log_dir=Path("./logs")),
     database=DatabaseConfigSqlite(db_path=Path("./celery_root.db")),
     beat=BeatConfig(schedule_path=Path("./celerybeat-schedule")),
     prometheus=PrometheusConfig(port=8001, prometheus_path="/metrics"),
@@ -158,6 +156,21 @@ Start the supervisor from Python:
 from celery_root import CeleryRoot
 
 root = CeleryRoot("your_app.celery:app")
+root.run()
+```
+
+Provide a logger if you want Celery Root to use your logging setup (subprocess logs are forwarded via a queue):
+
+```python
+import logging
+
+from celery_root import CeleryRoot
+
+logger = logging.getLogger("celery_root")
+logger.setLevel(logging.INFO)
+logger.addHandler(logging.StreamHandler())
+
+root = CeleryRoot("your_app.celery:app", logger=logger)
 root.run()
 ```
 

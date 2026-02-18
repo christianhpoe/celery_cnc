@@ -13,7 +13,6 @@ import secrets
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
-from shutil import rmtree
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -24,33 +23,6 @@ def _default_rpc_socket_path() -> Path:
     root = Path.cwd().resolve()
     digest = hashlib.sha256(str(root).encode("utf-8")).hexdigest()[:8]
     return Path(tempfile.gettempdir()) / f"celery_root_{digest}.sock"
-
-
-class LoggingConfigFile(BaseModel):
-    """File-based logging configuration."""
-
-    model_config = ConfigDict(validate_assignment=True, extra="ignore")
-
-    log_dir: Path = Path("./logs")
-    log_rotation_hours: int = Field(default=24, gt=0)
-    log_level: str = "INFO"
-    delete_on_boot: bool = False
-
-    @field_validator("log_dir", mode="after")
-    @classmethod
-    def _expand_log_dir(cls, value: Path) -> Path:
-        return value.expanduser()
-
-    @model_validator(mode="after")
-    def _ensure_log_dir(self) -> LoggingConfigFile:
-        if self.delete_on_boot and self.log_dir.exists():
-            for entry in self.log_dir.iterdir():
-                if entry.is_dir():
-                    rmtree(entry)
-                else:
-                    entry.unlink(missing_ok=True)
-        self.log_dir.mkdir(parents=True, exist_ok=True)
-        return self
 
 
 class DatabaseConfigBase(BaseModel):
@@ -204,7 +176,6 @@ class CeleryRootConfig(BaseModel):
 
     model_config = ConfigDict(validate_assignment=True, extra="ignore")
 
-    logging: LoggingConfigFile = Field(default_factory=LoggingConfigFile)
     database: DatabaseConfigSqlite = Field(default_factory=DatabaseConfigSqlite)
     beat: BeatConfig | None = None
     prometheus: PrometheusConfig | None = None
@@ -262,7 +233,6 @@ __all__ = [
     "DatabaseConfigBase",
     "DatabaseConfigSqlite",
     "FrontendConfig",
-    "LoggingConfigFile",
     "McpConfig",
     "OpenTelemetryConfig",
     "PrometheusConfig",

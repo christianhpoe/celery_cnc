@@ -24,7 +24,6 @@ from celery_root.config import (
     CeleryRootConfig,
     DatabaseConfigSqlite,
     FrontendConfig,
-    LoggingConfigFile,
     get_settings,
     reset_settings,
     set_settings,
@@ -78,7 +77,6 @@ def _wait_for_db_manager(config: CeleryRootConfig, timeout_seconds: float = 5.0)
 @pytest.fixture(scope="session")
 def web_client(tmp_path_factory: pytest.TempPathFactory) -> Generator[Client, None, None]:
     db_path = tmp_path_factory.mktemp("celery_root") / "celery_root.db"
-    log_dir = tmp_path_factory.mktemp("celery_root_logs")
     os.environ.setdefault("DJANGO_SETTINGS_MODULE", "celery_root.components.web.settings")
     reset_settings()
     rpc_port = _free_port()
@@ -86,7 +84,6 @@ def web_client(tmp_path_factory: pytest.TempPathFactory) -> Generator[Client, No
     rpc_socket_path = Path(tempfile.gettempdir()) / f"celery_root_{secrets.token_hex(4)}.sock"
     set_settings(
         CeleryRootConfig(
-            logging=LoggingConfigFile(log_dir=log_dir),
             database=DatabaseConfigSqlite(
                 db_path=db_path,
                 rpc_port=rpc_port,

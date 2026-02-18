@@ -6,7 +6,7 @@
 
 [project]
 name = "celery_root"
-version = "0.3.0"
+version = "0.3.1"
 description = "Command & Control for Celery Workers"
 readme = "README.md"
 license = "BSD-3-Clause"

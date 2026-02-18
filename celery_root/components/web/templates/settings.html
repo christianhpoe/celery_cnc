@@ -103,21 +103,6 @@ SPDX-License-Identifier: BSD-3-Clause
         id="settings-otel"
       >
         <section class="detail-card">
-          <h3>Exporter Status</h3>
-          <p class="detail-runtime">
-            Status:
-            <span
-              class="badge {% if otel_component.status == 'up' %}badge-success{% elif otel_component.status == 'down' %}badge-danger{% elif otel_component.status == 'configured' %}badge-info{% else %}badge-muted{% endif %}"
-            >
-              {{ otel_component.status }}
-            </span>
-          </p>
-          {% if otel_component.pid %}
-            <p class="detail-runtime">Process PID: {{ otel_component.pid }}</p>
-          {% endif %}
-        </section>
-
-        <section class="detail-card">
           <h3>Configuration</h3>
           <p class="detail-runtime">Service name: {{ otel_component.config.service_name }}</p>
           <p class="detail-runtime">Endpoint: {{ otel_component.config.endpoint }}</p>
@@ -132,21 +117,6 @@ SPDX-License-Identifier: BSD-3-Clause
         aria-labelledby="settings-prometheus-tab"
         id="settings-prometheus"
       >
-        <section class="detail-card">
-          <h3>Exporter Status</h3>
-          <p class="detail-runtime">
-            Status:
-            <span
-              class="badge {% if prometheus_component.status == 'up' %}badge-success{% elif prometheus_component.status == 'down' %}badge-danger{% elif prometheus_component.status == 'configured' %}badge-info{% else %}badge-muted{% endif %}"
-            >
-              {{ prometheus_component.status }}
-            </span>
-          </p>
-          {% if prometheus_component.pid %}
-            <p class="detail-runtime">Process PID: {{ prometheus_component.pid }}</p>
-          {% endif %}
-        </section>
-
         <section class="detail-card">
           <h3>Scrape Endpoint</h3>
           <p class="detail-runtime">Path: {{ prometheus_component.config.path }}</p>

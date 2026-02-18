@@ -26,7 +26,7 @@ from pydantic import ValidationError
 from celery_root.config import DatabaseConfigSqlite, set_settings
 from celery_root.core.db.adapters.sqlite import SQLiteController
 from celery_root.core.db.dispatch import RPC_OPERATIONS
-from celery_root.core.logging.setup import configure_process_logging
+from celery_root.core.logging import LogQueueConfig, configure_subprocess_logging
 from celery_root.shared.schemas import RPC_SCHEMA_VERSION, RpcError, RpcRequestEnvelope, RpcResponseEnvelope
 
 if TYPE_CHECKING:
@@ -98,11 +98,13 @@ class DBManager(Process):
         self,
         config: CeleryRootConfig,
         controller_factory: Callable[[], BaseDBController] | None = None,
+        log_config: LogQueueConfig | None = None,
     ) -> None:
         """Create a DB manager process."""
         super().__init__(daemon=True)
         self._config = config
         self._controller_factory = controller_factory
+        self._log_config = log_config
         self._stop_event = Event()
         self._logger = logging.getLogger(__name__)
         self._address = config.database.rpc_address()
@@ -118,7 +120,7 @@ class DBManager(Process):
     def run(self) -> None:
         """Run the RPC server loop."""
         set_settings(self._config)
-        configure_process_logging(self._config, component="db_manager")
+        configure_subprocess_logging(self._log_config)
         self._logger.info("DBManager starting.")
         self._logger.info("DBManager RPC socket path: %s", self._config.database.rpc_socket_path)
         self._logger.info("DBManager RPC auth enabled: %s", bool(self._authkey))

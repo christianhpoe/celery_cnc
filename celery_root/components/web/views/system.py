@@ -50,13 +50,11 @@ def metrics(_: HttpRequest) -> HttpResponse:
 
 
 def components(_: HttpRequest) -> JsonResponse:
-    """Return component status summary for the UI."""
+    """Return component configuration summary for the UI."""
     snapshot = component_snapshot()
     payload = {
         key: {
             "enabled": info.enabled,
-            "status": info.status,
-            "pid": info.pid,
             "url": info.url,
             "config": info.config,
         }

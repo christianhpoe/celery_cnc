@@ -42,8 +42,6 @@ def test_prometheus_enabled_renders(monkeypatch: pytest.MonkeyPatch) -> None:
         key="prometheus",
         display_name="Prometheus",
         enabled=True,
-        status="up",
-        pid=123,
         url="http://127.0.0.1:9001/metrics",
         config={"port": 9001, "path": "/metrics"},
     )
@@ -68,8 +66,6 @@ def test_opentelemetry_enabled_renders(monkeypatch: pytest.MonkeyPatch) -> None:
         key="open_telemetry",
         display_name="OpenTelemetry",
         enabled=True,
-        status="up",
-        pid=456,
         config={"endpoint": "http://localhost:4317"},
     )
     monkeypatch.setattr(metrics_views, "component_snapshot", lambda: {"open_telemetry": info})

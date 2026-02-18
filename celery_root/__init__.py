@@ -21,7 +21,6 @@ from .config import (
     DatabaseConfigBase,
     DatabaseConfigSqlite,
     FrontendConfig,
-    LoggingConfigFile,
     McpConfig,
     OpenTelemetryConfig,
     PrometheusConfig,
@@ -30,10 +29,12 @@ from .config import (
 )
 from .core.db.adapters.base import BaseDBController
 from .core.db.adapters.sqlite import SQLiteController
+from .core.logging import LogQueueRuntime, create_log_runtime
 from .core.process_manager import ProcessManager
 from .core.registry import WorkerRegistry
 
 if TYPE_CHECKING:
+    import logging
     from collections.abc import Callable
     from types import ModuleType
 
@@ -53,6 +54,7 @@ class CeleryRoot:
         db_controller: BaseDBController | Callable[[], BaseDBController] | None = None,
         purge_db: bool | None = None,
         retention_days: int | None = None,
+        logger: logging.Logger | None = None,
     ) -> None:
         """Initialize the Root service with worker targets and configuration."""
         if config is None:
@@ -83,6 +85,8 @@ class CeleryRoot:
         self.registry = WorkerRegistry(workers)
         self._db_controller = db_controller
         self._process_manager: ProcessManager | None = None
+        self._log_runtime: LogQueueRuntime | None = None
+        self._logger = logger
         self._ensure_sqlite_db_path()
         if isinstance(self.config.database, DatabaseConfigSqlite) and self.config.database.purge_db:
             self._purge_existing_db()
@@ -92,9 +96,15 @@ class CeleryRoot:
     def run(self) -> None:
         """Start all subprocesses and block until shutdown."""
         controller_factory = self._resolve_db_controller_factory()
-        manager = ProcessManager(self.registry, self.config, controller_factory)
+        log_runtime = create_log_runtime(self._logger)
+        self._log_runtime = log_runtime
+        manager = ProcessManager(self.registry, self.config, controller_factory, log_runtime.config)
         self._process_manager = manager
-        manager.run()
+        log_runtime.start()
+        try:
+            manager.run()
+        finally:
+            log_runtime.stop()
 
     def _resolve_db_controller_factory(self) -> Callable[[], BaseDBController] | None:
         if self._db_controller is not None and callable(self._db_controller):
@@ -293,7 +303,6 @@ __all__ = [
     "DatabaseConfigBase",
     "DatabaseConfigSqlite",
     "FrontendConfig",
-    "LoggingConfigFile",
     "McpConfig",
     "OpenTelemetryConfig",
     "PrometheusConfig",

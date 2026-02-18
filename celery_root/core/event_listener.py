@@ -24,7 +24,7 @@ from pydantic import BaseModel
 from celery_root.config import set_settings
 from celery_root.core.db.models import TaskEvent, TaskRelation, WorkerEvent
 from celery_root.core.db.rpc_client import DbRpcClient, RpcCallError
-from celery_root.core.logging.setup import configure_process_logging
+from celery_root.core.logging import LogQueueConfig, configure_subprocess_logging
 from celery_root.core.logging.utils import sanitize_component
 from celery_root.core.registry import WorkerRegistry
 from celery_root.shared.redaction import redact_access_data, redact_url_password
@@ -223,6 +223,7 @@ class EventListener(Process):
         broker_url: str,
         config: CeleryRootConfig | None = None,
         metrics_queues: Sequence[Queue[object]] | None = None,
+        log_config: LogQueueConfig | None = None,
     ) -> None:
         """Create an event listener for a broker URL."""
         super().__init__(daemon=True)
@@ -230,6 +231,7 @@ class EventListener(Process):
         self._broker_url_redacted = _redact_broker_url(broker_url)
         self._metrics_queues = list(metrics_queues or [])
         self._config = config
+        self._log_config = log_config
         self._stop_event = Event()
         self._logger = logging.getLogger(__name__)
         self._db_client: DbRpcClient | None = None
@@ -243,9 +245,7 @@ class EventListener(Process):
         component = f"event_listener-{sanitize_component(self._broker_url_redacted)}"
         if self._config is not None:
             set_settings(self._config)
-            configure_process_logging(self._config, component=component)
-        else:
-            configure_process_logging(component=component)
+        configure_subprocess_logging(self._log_config)
         self._logger.info("EventListener starting for %s", self._broker_url_redacted)
         if self._config is not None:
             self._logger.info(

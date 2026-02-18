@@ -22,7 +22,6 @@ from celery_root.config import (
     CeleryRootConfig,
     DatabaseConfigSqlite,
     FrontendConfig,
-    LoggingConfigFile,
     McpConfig,
     PrometheusConfig,
 )
@@ -52,7 +51,6 @@ def _fake_render(_request: object, _template: str, context: dict[str, object]) -
 def test_settings_page_builds_snippets(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     frontend_host = "0.0.0.0"  # noqa: S104
     config = CeleryRootConfig(
-        logging=LoggingConfigFile(log_dir=tmp_path / "logs"),
         database=DatabaseConfigSqlite(db_path=tmp_path / "db.sqlite"),
         prometheus=PrometheusConfig(port=9001, prometheus_path="metrics"),
         frontend=FrontendConfig(
@@ -68,23 +66,17 @@ def test_settings_page_builds_snippets(monkeypatch: pytest.MonkeyPatch, tmp_path
             key="prometheus",
             display_name="Prometheus",
             enabled=True,
-            status="up",
-            pid=111,
             url="http://127.0.0.1:9001/metrics",
         ),
         "open_telemetry": ComponentInfo(
             key="open_telemetry",
             display_name="OpenTelemetry",
             enabled=False,
-            status="down",
-            pid=None,
         ),
         "mcp": ComponentInfo(
             key="mcp",
             display_name="MCP",
             enabled=True,
-            status="up",
-            pid=222,
             url="http://127.0.0.1:9100/mcp/",
         ),
     }

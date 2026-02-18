@@ -8,6 +8,7 @@
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 
 from celery_root import (
@@ -15,7 +16,6 @@ from celery_root import (
     CeleryRoot,
     CeleryRootConfig,
     DatabaseConfigSqlite,
-    LoggingConfigFile,
     McpConfig,
     OpenTelemetryConfig,
     PrometheusConfig,
@@ -24,18 +24,20 @@ from demo.worker_math import app as math_app
 from demo.worker_sleep import app as sleep_app
 from demo.worker_text import app as text_app
 
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.WARNING)
+
 
 def main() -> None:
     """Start the Root supervisor and dev web server."""
     config = CeleryRootConfig(
-        logging=LoggingConfigFile(log_dir=Path("./demo/data/logs"), delete_on_boot=True, log_level="DEBUG"),
         database=DatabaseConfigSqlite(db_path=None),
         open_telemetry=OpenTelemetryConfig(endpoint="http://localhost:4317"),
         beat=BeatConfig(schedule_path=Path("./demo/data/beat.schedule"), delete_schedules_on_boot=True),
         prometheus=PrometheusConfig(),
         mcp=McpConfig(port=9100, auth_key="some-super-secret-key"),
     )
-    root = CeleryRoot(math_app, text_app, sleep_app, config=config)
+    root = CeleryRoot(math_app, text_app, sleep_app, config=config, logger=logger)
     root.run()
 
 
