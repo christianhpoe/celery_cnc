@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING
 import pytest
 
 from celery_root import CeleryRoot, _derive_worker_import_paths, _parse_worker_paths, _resolve_app_import_path
-from celery_root.config import BeatConfig, CeleryRootConfig, DatabaseConfigSqlite
+from celery_root.config import CeleryRootConfig, DatabaseConfigSqlite
 from celery_root.core.db.adapters.base import BaseDBController
 from celery_root.core.db.adapters.sqlite import SQLiteController
 from celery_root.core.db.models import (
@@ -176,18 +176,6 @@ def test_resolve_db_controller_factory(tmp_path: Path) -> None:
     factory = root2._resolve_db_controller_factory()
     assert factory is not None
     assert factory() is dummy
-
-
-def test_purge_schedule_file(tmp_path: Path) -> None:
-    schedule_path = tmp_path / "schedule.db"
-    schedule_path.write_text("data")
-    config = CeleryRootConfig(
-        database=DatabaseConfigSqlite(db_path=tmp_path / "db.sqlite"),
-        beat=BeatConfig(schedule_path=schedule_path),
-    )
-    root = CeleryRoot(config=config)
-    root._purge_schedule_file()
-    assert not schedule_path.exists()
 
 
 def test_purge_existing_db(tmp_path: Path) -> None:

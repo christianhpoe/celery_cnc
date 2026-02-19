@@ -9,6 +9,7 @@
 from __future__ import annotations
 
 import logging
+from logging.handlers import TimedRotatingFileHandler
 from pathlib import Path
 
 from celery_root import (
@@ -24,18 +25,41 @@ from demo.worker_math import app as math_app
 from demo.worker_sleep import app as sleep_app
 from demo.worker_text import app as text_app
 
-logger = logging.getLogger(__name__)
-logger.setLevel(logging.WARNING)
+_LOG_FORMAT = "[%(asctime)s] [%(name)s] [%(levelname)s] %(message)s"
+
+
+def _build_logger() -> logging.Logger:
+    logger = logging.getLogger("demo.root")
+    logger.setLevel(logging.DEBUG)
+    logger.propagate = False
+    log_path = Path("demo_root.log")
+    handler_present = False
+    for handler in logger.handlers:
+        if isinstance(handler, TimedRotatingFileHandler) and Path(handler.baseFilename) == log_path.resolve():
+            handler_present = True
+            break
+    if not handler_present:
+        file_handler = TimedRotatingFileHandler(
+            log_path,
+            when="D",
+            interval=1,
+            backupCount=0,
+        )
+        file_handler.setLevel(logging.DEBUG)
+        file_handler.setFormatter(logging.Formatter(_LOG_FORMAT))
+        logger.addHandler(file_handler)
+    return logger
 
 
 def main() -> None:
     """Start the Root supervisor and dev web server."""
+    logger = _build_logger()
     config = CeleryRootConfig(
-        database=DatabaseConfigSqlite(db_path=None),
+        database=DatabaseConfigSqlite(db_path=Path("./demo/data/sqlite.db"), purge_db=True),
         open_telemetry=OpenTelemetryConfig(endpoint="http://localhost:4317"),
-        beat=BeatConfig(schedule_path=Path("./demo/data/beat.schedule"), delete_schedules_on_boot=True),
+        beat=BeatConfig(),
         prometheus=PrometheusConfig(),
-        mcp=McpConfig(port=9100, auth_key="some-super-secret-key"),
+        mcp=McpConfig(port=5557, auth_key="development"),
     )
     root = CeleryRoot(math_app, text_app, sleep_app, config=config, logger=logger)
     root.run()

@@ -7,5 +7,6 @@
 """Beat component helpers."""
 
 from .controller import BeatController
+from .db_scheduler import DatabaseScheduler
 
-__all__ = ["BeatController"]
+__all__ = ["BeatController", "DatabaseScheduler"]

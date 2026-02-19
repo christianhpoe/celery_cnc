@@ -78,21 +78,7 @@ class BeatConfig(BaseModel):
 
     model_config = ConfigDict(validate_assignment=True, extra="ignore")
 
-    schedule_path: Path | None = None
-    delete_schedules_on_boot: bool = False
-
-    @field_validator("schedule_path", mode="after")
-    @classmethod
-    def _expand_schedule_path(cls, value: Path | None) -> Path | None:
-        if value is None:
-            return None
-        return value.expanduser()
-
-    @model_validator(mode="after")
-    def _ensure_schedule_parent(self) -> BeatConfig:
-        if self.schedule_path is not None:
-            self.schedule_path.parent.mkdir(parents=True, exist_ok=True)
-        return self
+    db_refresh_seconds: float | None = Field(default=None, gt=0)
 
 
 class PrometheusConfig(BaseModel):

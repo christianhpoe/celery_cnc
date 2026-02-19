@@ -90,8 +90,6 @@ class CeleryRoot:
         self._ensure_sqlite_db_path()
         if isinstance(self.config.database, DatabaseConfigSqlite) and self.config.database.purge_db:
             self._purge_existing_db()
-        if self.config.beat is not None and self.config.beat.delete_schedules_on_boot:
-            self._purge_schedule_file()
 
     def run(self) -> None:
         """Start all subprocesses and block until shutdown."""
@@ -187,25 +185,6 @@ class CeleryRoot:
                 return self.config.database.db_path
             return None
         return None
-
-    def _purge_schedule_file(self) -> None:
-        beat_config = self.config.beat
-        if beat_config is None:
-            return
-        schedule_path = beat_config.schedule_path
-        if schedule_path is None:
-            return
-        resolved = Path(schedule_path).expanduser().resolve()
-        if not resolved.exists():
-            return
-        if resolved.is_dir():
-            msg = f"Beat schedule path points to a directory: {resolved}"
-            raise RuntimeError(msg)
-        try:
-            resolved.unlink()
-        except OSError as exc:  # pragma: no cover - depends on OS permissions
-            msg = f"Failed to purge beat schedule file at {resolved}: {exc}"
-            raise RuntimeError(msg) from exc
 
     @staticmethod
     def _ensure_worker_import_paths(

@@ -138,7 +138,7 @@ from celery_root import (
 
 config = CeleryRootConfig(
     database=DatabaseConfigSqlite(db_path=Path("./celery_root.db")),
-    beat=BeatConfig(schedule_path=Path("./celerybeat-schedule")),
+    beat=BeatConfig(),
     prometheus=PrometheusConfig(port=8001, prometheus_path="/metrics"),
     open_telemetry=OpenTelemetryConfig(endpoint="http://localhost:4317"),
     frontend=FrontendConfig(host="127.0.0.1", port=5555),
@@ -152,6 +152,16 @@ from celery_root.config import set_settings
 
 set_settings(config)
 ```
+
+**Beat Scheduler**
+To manage schedules from the UI without Django, configure Celery beat to use the Root DB scheduler:
+
+```python
+app.conf.beat_scheduler = "celery_root.components.beat.db_scheduler:DatabaseScheduler"
+app.conf.beat_db_refresh_seconds = 5.0  # optional polling interval
+```
+
+Run one beat per broker/app (Celery beat can only talk to one broker at a time). The UI will read/write schedules in the Root DB.
 
 ## Library usage
 

@@ -14,6 +14,8 @@ from typing import TYPE_CHECKING
 
 from celery import Celery
 
+from celery_root.config import get_settings
+
 if TYPE_CHECKING:
     from collections.abc import Iterable
 
@@ -39,6 +41,7 @@ class WorkerRegistry:
     def register(self, worker: Celery | str) -> None:
         """Register a Celery app or import path."""
         app = worker if isinstance(worker, Celery) else self._load_app(worker)
+        self._apply_beat_scheduler(app)
         name = self._resolve_name(app)
         existing = self._apps.get(name)
         if existing is not None and existing is not app:
@@ -104,3 +107,15 @@ class WorkerRegistry:
         if not name:
             name = f"celery_app_{id(app)}"
         return name
+
+    @staticmethod
+    def _apply_beat_scheduler(app: Celery) -> None:
+        beat = get_settings().beat
+        if beat is None:
+            return
+        scheduler = str(app.conf.get("beat_scheduler") or "")
+        if "django_celery_beat" in scheduler:
+            return
+        app.conf.beat_scheduler = "celery_root.components.beat.db_scheduler:DatabaseScheduler"
+        if beat.db_refresh_seconds is not None:
+            app.conf.beat_db_refresh_seconds = beat.db_refresh_seconds

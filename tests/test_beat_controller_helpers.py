@@ -37,33 +37,6 @@ class _DummyPeriodic:
         self.interval = None
 
 
-class _DummyEntry:
-    def __init__(self) -> None:
-        self.schedule = crontab(minute="0", hour="1", day_of_month="*", month_of_year="*", day_of_week="*")
-        self.task = "demo.add"
-        self.args = ()
-        self.kwargs: dict[str, object] = {}
-        self.options = {"enabled": True}
-        self.last_run_at = datetime.now(UTC)
-        self.total_run_count = 1
-
-
-class _DummyScheduler:
-    def __init__(self) -> None:
-        self.schedule: dict[str, _DummyEntry] = {"demo": _DummyEntry()}
-        self.synced = False
-        self.closed = False
-
-    def setup_schedule(self) -> None:
-        return None
-
-    def sync(self) -> None:
-        self.synced = True
-
-    def close(self) -> None:
-        self.closed = True
-
-
 def test_parse_and_format_schedule() -> None:
     schedule_obj = beat_controller._parse_schedule("*/5 * * * *")
     assert isinstance(schedule_obj, crontab)
@@ -96,17 +69,28 @@ def test_detect_backend() -> None:
     app = app_one.app
     controller = BeatController(app)
     backend = controller.detect_backend()
-    assert backend.name in {"file", "django_celery_beat"}
+    assert backend.name in {"db", "django_celery_beat"}
 
 
-def test_file_schedule_operations(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_db_schedule_operations() -> None:
     app = app_one.app
-    controller = BeatController(app)
-    scheduler = _DummyScheduler()
-    monkeypatch.setattr(BeatController, "_file_scheduler", lambda _self: scheduler)
 
-    schedules = controller._list_file_schedules()
-    assert schedules
+    class _DbStub:
+        def __init__(self) -> None:
+            self.schedules: list[Schedule] = []
+
+        def get_schedules(self) -> list[Schedule]:
+            return list(self.schedules)
+
+        def store_schedule(self, schedule: Schedule) -> None:
+            self.schedules = [item for item in self.schedules if item.schedule_id != schedule.schedule_id]
+            self.schedules.append(schedule)
+
+        def delete_schedule(self, schedule_id: str) -> None:
+            self.schedules = [item for item in self.schedules if item.schedule_id != schedule_id]
+
+    db = _DbStub()
+    controller = BeatController(app, cast("Any", db))
 
     schedule = Schedule(
         schedule_id="demo",
@@ -120,11 +104,14 @@ def test_file_schedule_operations(monkeypatch: pytest.MonkeyPatch) -> None:
         total_run_count=1,
         app=None,
     )
-    controller._save_file_schedule(schedule)
-    assert scheduler.synced
+    controller.save_schedule(schedule)
+    assert db.schedules
 
-    controller._delete_file_schedule(schedule.schedule_id)
-    assert scheduler.closed
+    schedules = controller.list_schedules()
+    assert any(item.schedule_id == "demo" for item in schedules)
+
+    controller.delete_schedule(schedule.schedule_id)
+    assert not db.schedules
 
 
 def test_django_schedule_operations(monkeypatch: pytest.MonkeyPatch) -> None:

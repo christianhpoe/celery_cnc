@@ -97,6 +97,22 @@ def _metrics_url(config: CeleryRootConfig) -> str:
     return f"http://{host}:{port}{path}"
 
 
+def _mcp_url(config: CeleryRootConfig) -> str:
+    mcp = config.mcp
+    host = "127.0.0.1" if mcp is None else mcp.host
+    port = 5557 if mcp is None else mcp.port
+    path = "/mcp/" if mcp is None else (mcp.path or "/mcp/")
+    if host in {"0.0.0.0", "::"}:  # noqa: S104
+        host = "127.0.0.1"
+    if ":" in host and not host.startswith("["):
+        host = f"[{host}]"
+    if not path.startswith("/"):
+        path = f"/{path}"
+    if path != "/" and not path.endswith("/"):
+        path = f"{path}/"
+    return f"http://{host}:{port}{path}"
+
+
 def _load_mcp_dependencies() -> McpDependencies:
     from uvicorn import Config as _UvicornConfig  # noqa: PLC0415
     from uvicorn import Server as _UvicornServer  # noqa: PLC0415
@@ -259,6 +275,10 @@ class _McpServerProcess(Process):
         configure_subprocess_logging(self._log_config)
         logger = logging.getLogger(__name__)
         logger.info("MCP server starting on %s:%s", self._host, self._port)
+        print(  # noqa: T201
+            f"MCP server available at {_mcp_url(self._config)}",
+        )
+
         logger.info("MCP server DB RPC socket path: %s", self._config.database.rpc_socket_path)
         logger.info("MCP server DB RPC auth enabled: %s", bool(self._config.database.rpc_auth_key))
         require_optional_scope("mcp")
