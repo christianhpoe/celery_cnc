@@ -133,6 +133,12 @@ def test_detect_backend_prefers_django_celery() -> None:
     assert beat.detect_backend(registry, "dummy") == "django_celery_beat"
 
 
+def test_detect_backend_prefers_root_db_scheduler() -> None:
+    app = DummyApp("celery_root.components.beat.db_scheduler:DatabaseScheduler")
+    registry = make_registry(app)
+    assert beat.detect_backend(registry, "dummy") == "db"
+
+
 def test_schedule_crud_via_db_controller() -> None:
     db = FakeDB()
     schedule = Schedule(

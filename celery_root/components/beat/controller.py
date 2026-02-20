@@ -13,9 +13,8 @@ import json
 import re
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
-from typing import TYPE_CHECKING, Any, Protocol, cast
+from typing import TYPE_CHECKING, Protocol, cast
 
-from celery.beat import PersistentScheduler, ScheduleEntry
 from celery.schedules import crontab
 from celery.schedules import schedule as interval_schedule
 
@@ -98,24 +97,6 @@ _UNIT_SECONDS = {
 _DJANGO_BEAT_UNAVAILABLE = "django-celery-beat is not available"
 
 
-class _ScheduleEntryLike(Protocol):
-    schedule: crontab | interval_schedule
-    task: str
-    args: tuple[object, ...]
-    kwargs: dict[str, object]
-    options: dict[str, object] | None
-    last_run_at: datetime | None
-    total_run_count: int | None
-
-
-class _SchedulerLike(Protocol):
-    schedule: dict[str, _ScheduleEntryLike]
-
-    def setup_schedule(self) -> None: ...
-    def sync(self) -> None: ...
-    def close(self) -> None: ...
-
-
 @dataclass(slots=True)
 class BeatBackend:
     """Descriptor for the active beat backend."""
@@ -125,7 +106,7 @@ class BeatBackend:
 
 
 class BeatController:
-    """Integrates with Celery beat backends (file-based or django-celery-beat)."""
+    """Integrates with Celery beat backends (DB or django-celery-beat)."""
 
     def __init__(self, app: Celery, db: DbClient | None = None) -> None:
         """Initialize the controller for a Celery app."""
@@ -138,23 +119,19 @@ class BeatController:
         scheduler = str(self._app.conf.get("beat_scheduler") or "")
         if "django_celery_beat" in scheduler:
             return BeatBackend(name="django_celery_beat", scheduler=scheduler)
-        if scheduler:
-            return BeatBackend(name="file", scheduler=scheduler)
-        return BeatBackend(name="file", scheduler="celery.beat.PersistentScheduler")
+        if not scheduler:
+            scheduler = "celery_root.components.beat.db_scheduler:DatabaseScheduler"
+        return BeatBackend(name="db", scheduler=scheduler)
 
     def list_schedules(self) -> list[Schedule]:
         """List schedules from the configured backend."""
         backend = self.detect_backend()
-        if backend.name == "django_celery_beat":
-            schedules = self._list_django_schedules()
-        else:
-            schedules = self._list_file_schedules()
-        return schedules
+        return self._list_django_schedules() if backend.name == "django_celery_beat" else self._list_db_schedules()
 
     def sync_to_db(self) -> list[Schedule]:
         """Sync backend schedules into the DB."""
         schedules = self.list_schedules()
-        if self._db is not None:
+        if self._db is not None and self.detect_backend().name != "db":
             for schedule in schedules:
                 self._db.store_schedule(schedule)
         return schedules
@@ -165,8 +142,8 @@ class BeatController:
         if backend.name == "django_celery_beat":
             self._save_django_schedule(schedule)
         else:
-            self._save_file_schedule(schedule)
-        if self._db is not None:
+            self._save_db_schedule(schedule)
+        if self._db is not None and backend.name != "db":
             self._db.store_schedule(schedule)
 
     def delete_schedule(self, schedule_id: str) -> None:
@@ -175,8 +152,8 @@ class BeatController:
         if backend.name == "django_celery_beat":
             self._delete_django_schedule(schedule_id)
         else:
-            self._delete_file_schedule(schedule_id)
-        if self._db is not None:
+            self._delete_db_schedule(schedule_id)
+        if self._db is not None and backend.name != "db":
             self._db.delete_schedule(schedule_id)
 
     def reload(self) -> None:
@@ -184,85 +161,12 @@ class BeatController:
         backend = self.detect_backend()
         if backend.name == "django_celery_beat":
             self._django_changed()
-        else:
-            scheduler = self._file_scheduler()
-            scheduler.sync()
-            scheduler.close()
 
-    def _file_scheduler(self) -> _SchedulerLike:
-        schedule_filename = self._app.conf.get("beat_schedule_filename") or "celerybeat-schedule"
-        scheduler = cast("Any", PersistentScheduler)(
-            app=self._app,
-            schedule_filename=str(schedule_filename),
-        )
-        return cast("_SchedulerLike", scheduler)
-
-    def _list_file_schedules(self) -> list[Schedule]:
-        scheduler = self._file_scheduler()
-        scheduler.setup_schedule()
-        schedules: list[Schedule] = []
-        for name, entry in scheduler.schedule.items():
-            schedules.append(self._schedule_from_entry(name, entry))
-        scheduler.sync()
-        scheduler.close()
-        return schedules
-
-    def _save_file_schedule(self, schedule: Schedule) -> None:
-        entry_name = schedule.schedule_id or schedule.name
-        schedule_obj = _parse_schedule(schedule.schedule)
-        args = _parse_args(schedule.args)
-        kwargs = _parse_kwargs(schedule.kwargs_)
-        self._update_app_schedule(
-            entry_name,
-            schedule.task,
-            schedule_obj,
-            args,
-            kwargs,
-            enabled=schedule.enabled,
-        )
-        scheduler = self._file_scheduler()
-        scheduler.setup_schedule()
-        entry = cast(
-            "_ScheduleEntryLike",
-            cast("Any", ScheduleEntry)(
-                name=entry_name,
-                task=schedule.task,
-                schedule=schedule_obj,
-                args=args,
-                kwargs=kwargs,
-                options={"enabled": schedule.enabled},
-                last_run_at=schedule.last_run_at or self._app.now(),
-                total_run_count=schedule.total_run_count or 0,
-                app=self._app,
-            ),
-        )
-        scheduler.schedule[entry_name] = entry
-        scheduler.sync()
-        scheduler.close()
-
-    def _delete_file_schedule(self, schedule_id: str) -> None:
-        scheduler = self._file_scheduler()
-        scheduler.setup_schedule()
-        if schedule_id in scheduler.schedule:
-            del scheduler.schedule[schedule_id]
-        self._delete_from_app_schedule(schedule_id)
-        scheduler.sync()
-        scheduler.close()
-
-    def _schedule_from_entry(self, name: str, entry: _ScheduleEntryLike) -> Schedule:
-        schedule_str = _format_schedule(entry.schedule)
-        return Schedule(
-            schedule_id=name,
-            name=name,
-            task=str(entry.task),
-            schedule=schedule_str,
-            args=_dump_json(entry.args),
-            kwargs_=_dump_json(entry.kwargs),
-            enabled=bool(entry.options.get("enabled", True)) if entry.options else True,
-            last_run_at=_coerce_datetime(entry.last_run_at),
-            total_run_count=int(entry.total_run_count or 0),
-            app=self._app_label,
-        )
+    def _require_db(self) -> DbClient:
+        if self._db is None:
+            msg = "DB client required for DB-backed beat scheduler"
+            raise RuntimeError(msg)
+        return self._db
 
     def _list_django_schedules(self) -> list[Schedule]:
         periodic_task_model = self._django_models().PeriodicTask
@@ -286,6 +190,12 @@ class BeatController:
                 ),
             )
         return schedules
+
+    def _list_db_schedules(self) -> list[Schedule]:
+        db = self._require_db()
+        label = self._app_label
+        schedules = db.get_schedules()
+        return [schedule for schedule in schedules if schedule.app == label]
 
     def _save_django_schedule(self, schedule: Schedule) -> None:
         models = self._django_models()
@@ -320,12 +230,22 @@ class BeatController:
         periodic.save()
         self._django_changed()
 
+    def _save_db_schedule(self, schedule: Schedule) -> None:
+        db = self._require_db()
+        if schedule.app is None:
+            schedule.app = self._app_label
+        db.store_schedule(schedule)
+
     def _delete_django_schedule(self, schedule_id: str) -> None:
         periodic_task_model = self._django_models().PeriodicTask
         deleted = periodic_task_model.objects.filter(id=_safe_int(schedule_id)).delete()
         if deleted[0] == 0:
             periodic_task_model.objects.filter(name=schedule_id).delete()
         self._django_changed()
+
+    def _delete_db_schedule(self, schedule_id: str) -> None:
+        db = self._require_db()
+        db.delete_schedule(schedule_id)
 
     def _django_models(self) -> DjangoBeatModels:
         try:
@@ -350,32 +270,6 @@ class BeatController:
             models.PeriodicTasks.changed()
         except RuntimeError:
             return
-
-    def _update_app_schedule(  # noqa: PLR0913
-        self,
-        name: str,
-        task: str,
-        schedule_obj: crontab | interval_schedule,
-        args: tuple[object, ...],
-        kwargs: dict[str, object],
-        *,
-        enabled: bool,
-    ) -> None:
-        beat_schedule = dict(self._app.conf.get("beat_schedule") or {})
-        beat_schedule[name] = {
-            "task": task,
-            "schedule": schedule_obj,
-            "args": args,
-            "kwargs": kwargs,
-            "options": {"enabled": enabled},
-        }
-        self._app.conf.beat_schedule = beat_schedule
-
-    def _delete_from_app_schedule(self, name: str) -> None:
-        beat_schedule = dict(self._app.conf.get("beat_schedule") or {})
-        if name in beat_schedule:
-            beat_schedule.pop(name, None)
-            self._app.conf.beat_schedule = beat_schedule
 
 
 def _django_unavailable_error() -> RuntimeError:
@@ -476,15 +370,6 @@ def _parse_kwargs(value: str | None) -> dict[str, object]:
     if isinstance(parsed, dict):
         return parsed
     return {}
-
-
-def _dump_json(value: object) -> str | None:
-    if value is None:
-        return None
-    try:
-        return json.dumps(value)
-    except TypeError:
-        return str(value)
 
 
 def _coerce_datetime(value: datetime | None) -> datetime | None:

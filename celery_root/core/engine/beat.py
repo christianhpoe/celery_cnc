@@ -28,9 +28,7 @@ def detect_backend(registry: WorkerRegistry, worker: str) -> str:
     scheduler = str(app.conf.get("beat_scheduler") or "")
     if "django_celery_beat" in scheduler:
         return "django_celery_beat"
-    if scheduler:
-        return scheduler
-    return "file"
+    return "db"
 
 
 def list_schedules(

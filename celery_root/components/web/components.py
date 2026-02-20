@@ -51,14 +51,7 @@ def component_snapshot() -> dict[str, ComponentInfo]:
             key="beat",
             display_name="Beat",
             enabled=beat is not None,
-            config=(
-                {
-                    "schedule_path": str(beat.schedule_path) if beat.schedule_path else None,
-                    "delete_on_boot": beat.delete_schedules_on_boot,
-                }
-                if beat is not None
-                else None
-            ),
+            config=({"db_refresh_seconds": beat.db_refresh_seconds} if beat is not None else None),
         ),
         "frontend": ComponentInfo(
             key="frontend",
